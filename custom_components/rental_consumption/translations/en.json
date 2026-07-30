@@ -1,0 +1,95 @@
+{
+  "title": "Rental consumption",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create apartment tracking",
+        "description": "Record consumption received on periodic statements, even without access to individual meters.",
+        "data": {
+          "apartment_name": "Apartment name",
+          "heating_unit": "Heating unit"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A tracker with this name already exists."
+    },
+    "error": {
+      "invalid_name": "The apartment name cannot be empty."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage consumption",
+        "menu_options": {
+          "add_water": "Add water period",
+          "add_heating": "Add heating period",
+          "delete_period": "Delete a period",
+          "rebuild_statistics": "Rebuild statistics"
+        }
+      },
+      "add_water": {
+        "title": "Add water consumption",
+        "description": "The value is distributed uniformly across the inclusive period.",
+        "data": {
+          "start_date": "Start date",
+          "end_date": "End date (inclusive)",
+          "value": "Total consumption (m³)",
+          "note": "Optional note"
+        }
+      },
+      "add_heating": {
+        "title": "Add heating consumption",
+        "description": "The value is distributed uniformly across the inclusive period.",
+        "data": {
+          "start_date": "Start date",
+          "end_date": "End date (inclusive)",
+          "value": "Total consumption",
+          "note": "Optional note"
+        }
+      },
+      "delete_period": {
+        "title": "Delete a period",
+        "data": {
+          "period_id": "Period"
+        }
+      },
+      "rebuild_statistics": {
+        "title": "Rebuild statistics",
+        "description": "Confirm to replace external statistics from the currently stored periods."
+      }
+    },
+    "error": {
+      "end_before_start": "The end date must be on or after the start date.",
+      "future_end": "The end date cannot be in the future.",
+      "invalid_value": "Consumption must be greater than zero.",
+      "overlap": "This period overlaps an existing period of the same type.",
+      "period_not_found": "The selected period no longer exists.",
+      "recorder_unavailable": "The Home Assistant Recorder database is unavailable."
+    },
+    "abort": {
+      "not_loaded": "The integration entry is not loaded.",
+      "no_periods": "No periods have been stored yet."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_imported_total": {
+        "name": "Water imported total"
+      },
+      "heating_imported_total": {
+        "name": "Heating imported total"
+      },
+      "water_last_period": {
+        "name": "Water latest period"
+      },
+      "heating_last_period": {
+        "name": "Heating latest period"
+      },
+      "period_count": {
+        "name": "Stored periods"
+      }
+    }
+  }
+}

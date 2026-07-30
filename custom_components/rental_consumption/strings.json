@@ -1,0 +1,99 @@
+{
+  "title": "Consommation locative",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Créer le suivi de l'appartement",
+        "description": "Enregistrez des consommations reçues sur des décomptes périodiques, même sans accès aux compteurs.",
+        "data": {
+          "apartment_name": "Nom de l'appartement",
+          "heating_unit": "Unité du chauffage"
+        },
+        "data_description": {
+          "heating_unit": "Choisissez l'unité telle qu'elle figure sur le décompte du bailleur ou de la régie."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Un suivi portant ce nom existe déjà."
+    },
+    "error": {
+      "invalid_name": "Le nom de l’appartement ne peut pas être vide."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gérer les consommations",
+        "menu_options": {
+          "add_water": "Ajouter une période d'eau",
+          "add_heating": "Ajouter une période de chauffage",
+          "delete_period": "Supprimer une période",
+          "rebuild_statistics": "Reconstruire les statistiques"
+        }
+      },
+      "add_water": {
+        "title": "Ajouter une consommation d'eau",
+        "description": "La valeur est répartie uniformément sur chaque jour de la période afin de créer un historique exploitable.",
+        "data": {
+          "start_date": "Date de début",
+          "end_date": "Date de fin incluse",
+          "value": "Consommation totale (m³)",
+          "note": "Note facultative"
+        }
+      },
+      "add_heating": {
+        "title": "Ajouter une consommation de chauffage",
+        "description": "La valeur est répartie uniformément sur chaque jour de la période afin de créer un historique exploitable.",
+        "data": {
+          "start_date": "Date de début",
+          "end_date": "Date de fin incluse",
+          "value": "Consommation totale",
+          "note": "Note facultative"
+        }
+      },
+      "delete_period": {
+        "title": "Supprimer une période",
+        "description": "La suppression reconstruit automatiquement tout l'historique de la consommation concernée.",
+        "data": {
+          "period_id": "Période"
+        }
+      },
+      "rebuild_statistics": {
+        "title": "Reconstruire les statistiques",
+        "description": "Confirmez pour remplacer les statistiques externes par celles calculées depuis les périodes actuellement stockées."
+      }
+    },
+    "error": {
+      "end_before_start": "La date de fin doit être postérieure ou égale à la date de début.",
+      "future_end": "La date de fin ne peut pas être dans le futur.",
+      "invalid_value": "La consommation doit être supérieure à zéro.",
+      "overlap": "Cette période chevauche une période existante du même type.",
+      "period_not_found": "La période sélectionnée n'existe plus.",
+      "recorder_unavailable": "La base de données Recorder de Home Assistant n'est pas disponible."
+    },
+    "abort": {
+      "not_loaded": "L'entrée d'intégration n'est pas chargée.",
+      "no_periods": "Aucune période n'est encore enregistrée."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "water_imported_total": {
+        "name": "Eau – total importé"
+      },
+      "heating_imported_total": {
+        "name": "Chauffage – total importé"
+      },
+      "water_last_period": {
+        "name": "Eau – dernière période"
+      },
+      "heating_last_period": {
+        "name": "Chauffage – dernière période"
+      },
+      "period_count": {
+        "name": "Périodes enregistrées"
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+add_period:
+  name: Ajouter une période
+  description: Ajoute une consommation d'eau ou de chauffage sur une période inclusive.
+  fields:
+    config_entry_id:
+      name: Identifiant de l'entrée
+      description: Identifiant de l'entrée Consommation locative.
+      required: true
+      selector:
+        text:
+    consumption_type:
+      name: Type
+      required: true
+      selector:
+        select:
+          options:
+            - label: Eau
+              value: water
+            - label: Chauffage
+              value: heating
+    start_date:
+      name: Début
+      required: true
+      selector:
+        date:
+    end_date:
+      name: Fin
+      required: true
+      selector:
+        date:
+    value:
+      name: Consommation
+      required: true
+      selector:
+        number:
+          min: 0.001
+          max: 1000000000
+          step: any
+          mode: box
+    note:
+      name: Note
+      required: false
+      selector:
+        text:
+          multiline: true
+
+delete_period:
+  name: Supprimer une période
+  description: Supprime une période par son identifiant et reconstruit les statistiques.
+  fields:
+    config_entry_id:
+      name: Identifiant de l'entrée
+      required: true
+      selector:
+        text:
+    period_id:
+      name: Identifiant de la période
+      required: true
+      selector:
+        text:
+
+rebuild_statistics:
+  name: Reconstruire les statistiques
+  description: Reconstruit les statistiques historiques à partir des périodes stockées.
+  fields:
+    config_entry_id:
+      name: Identifiant de l'entrée
+      required: true
+      selector:
+        text:
