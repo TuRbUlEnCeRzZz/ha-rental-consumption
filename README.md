@@ -1,8 +1,8 @@
 # Consommation locative pour Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
-[![Validate](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml)
-[![Version](https://img.shields.io/github/v/release/TuRbUIEnCeRzZ/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
+[![Validate](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
+[![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
 
 Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry Pi 4, destinée aux appartements locatifs sans compteurs individuels accessibles. Elle permet de saisir les consommations communiquées par la régie ou le bailleur pour une période déterminée.
 
