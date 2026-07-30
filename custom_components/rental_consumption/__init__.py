@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from datetime import date
+import logging
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.start import async_at_started
 
 from .const import (
     CONF_CONSUMPTION_TYPE,
@@ -32,6 +34,8 @@ from .frontend import async_register_frontend, async_unregister_frontend
 from .manager import RentalConsumptionManager
 from .websocket import async_register_websocket_commands
 from .models import PeriodValidationError
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -122,13 +126,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_frontend(hass)
+
+    @callback
+    def _schedule_statistics_rebuild(started_hass: HomeAssistant) -> None:
+        """Rebuild statistics only after Home Assistant has fully started."""
+        entry.async_create_background_task(
+            started_hass,
+            _async_rebuild_statistics_after_start(manager),
+            "rebuild rental consumption statistics after startup",
+        )
+
+    entry.async_on_unload(async_at_started(hass, _schedule_statistics_rebuild))
+    return True
+
+
+async def _async_rebuild_statistics_after_start(
+    manager: RentalConsumptionManager,
+) -> None:
+    """Rebuild external statistics without delaying Home Assistant startup."""
     try:
         await manager.async_rebuild_statistics()
-    except RuntimeError:
-        # Recorder startup failure is already surfaced by Home Assistant.
-        # Sensors and stored periods remain available.
-        pass
-    return True
+    except (HomeAssistantError, RuntimeError) as err:
+        _LOGGER.warning(
+            "Stored periods are available, but statistics could not be rebuilt: %s",
+            err,
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
