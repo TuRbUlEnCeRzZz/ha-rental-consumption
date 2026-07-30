@@ -26,9 +26,6 @@ Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry 
 - HACS pour l'installation et les mises à jour ;
 - aucune bibliothèque Python externe.
 
-## Publication de ce modèle sur GitHub
-
-Lors du premier envoi, le workflow **Initialize repository** remplace automatiquement les marqueurs par le propriétaire et le nom réels du dépôt. Aucune commande locale n'est nécessaire. Les instructions détaillées se trouvent dans `GITHUB_SETUP.md`.
 
 ## Installation avec HACS
 
