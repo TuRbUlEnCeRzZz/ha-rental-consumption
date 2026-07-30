@@ -25,11 +25,7 @@ Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry 
 - Home Assistant Core **2026.7.4 ou plus récent** ;
 - Home Assistant OS sur Raspberry Pi 4 pris en charge ;
 - HACS pour l'installation et les mises à jour ;
-- aucune bibliothèque Python externe.
-
-## Publication de ce modèle sur GitHub
-
-Lors du premier envoi, le workflow **Initialize repository** remplace automatiquement les marqueurs par le propriétaire et le nom réels du dépôt. Aucune commande locale n'est nécessaire. Les instructions détaillées se trouvent dans `GITHUB_SETUP.md`.
+- aucune bibliothèque Python 
 
 ## Installation avec HACS
 
