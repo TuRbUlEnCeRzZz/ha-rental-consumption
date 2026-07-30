@@ -1,0 +1,51 @@
+name: Initialize repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  initialize:
+    name: Personalize repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply GitHub owner and repository name
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: |
+          python prepare_github.py \
+            --username "$REPOSITORY_OWNER" \
+            --repository "$REPOSITORY_NAME"
+
+      - name: Commit personalization
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          if git diff --quiet; then
+            echo "Le dépôt est déjà personnalisé."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Initialize repository for ${GITHUB_REPOSITORY}"
+          git push origin "HEAD:${BRANCH_NAME}"
+
+      - name: Start validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          gh workflow run validate.yml --ref "$BRANCH_NAME"
