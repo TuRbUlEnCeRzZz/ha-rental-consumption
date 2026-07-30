@@ -1,8 +1,8 @@
 # Consommation locative pour Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
-[![Validate](https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__/actions/workflows/validate.yml/badge.svg)](https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__/actions/workflows/validate.yml)
-[![Version](https://img.shields.io/github/v/release/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__?include_prereleases)](https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__/releases)
+[![Validate](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
+[![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
 
 Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry Pi 4, destinée aux appartements locatifs sans compteurs individuels accessibles. Elle permet de saisir les consommations communiquées par la régie ou le bailleur pour une période déterminée.
 
@@ -29,13 +29,13 @@ Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry 
 
 ## Installation avec HACS
 
-[![Ouvrir le dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=__GITHUB_USERNAME__&repository=__GITHUB_REPOSITORY__&category=integration)
+[![Ouvrir le dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TuRbUlEnCeRzZz&repository=ha-rental-consumption&category=integration)
 
 Installation manuelle dans HACS :
 
 1. Ouvrir **HACS**.
 2. Ouvrir le menu **⋮ → Dépôts personnalisés**.
-3. Ajouter `https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__`.
+3. Ajouter `https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption`.
 4. Choisir la catégorie **Intégration**.
 5. Rechercher **Consommation locative** et cliquer sur **Télécharger**.
 6. Redémarrer complètement Home Assistant.
@@ -118,4 +118,4 @@ Les périodes sont conservées dans le stockage de Home Assistant et sont inclus
 
 ## Assistance
 
-Les problèmes peuvent être signalés dans les [issues GitHub](https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__/issues).
+Les problèmes peuvent être signalés dans les [issues GitHub](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/issues).

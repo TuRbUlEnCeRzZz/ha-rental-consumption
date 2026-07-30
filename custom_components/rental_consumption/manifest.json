@@ -2,16 +2,16 @@
   "domain": "rental_consumption",
   "name": "Consommation locative",
   "codeowners": [
-    "@__GITHUB_USERNAME__"
+    "@TuRbUlEnCeRzZz"
   ],
   "config_flow": true,
   "dependencies": [
     "recorder"
   ],
-  "documentation": "https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__#readme",
+  "documentation": "https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption#readme",
   "integration_type": "helper",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/__GITHUB_USERNAME__/__GITHUB_REPOSITORY__/issues",
+  "issue_tracker": "https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/issues",
   "requirements": [],
   "version": "1.0.0"
 }
