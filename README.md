@@ -4,64 +4,62 @@
 [![Validate](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
 [![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
 
-Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry Pi 4, destinée aux appartements locatifs sans compteurs individuels accessibles. Elle permet de saisir les consommations communiquées par la régie ou le bailleur pour une période déterminée.
+Custom integration for **Home Assistant OS**, specifically on the Raspberry Pi 4, designed for rental apartments without accessible individual meters. It allows you to enter consumption data provided by the property management company or landlord for a specific period.
 
-## Fonctions
+## Features
 
-- panneau **Consommation locative** directement dans la barre latérale ;
-- saisie depuis l'interface Home Assistant, sans YAML obligatoire ;
-- eau en m³ ;
-- chauffage en kWh, MWh, GJ ou unités de répartition ;
-- périodes indépendantes pour l'eau et le chauffage ;
-- contrôle des chevauchements ;
-- stockage persistant dans Home Assistant ;
-- capteurs de total, dernière période et nombre de périodes ;
-- statistiques historiques externes dans Recorder ;
-- répartition uniforme du total sur les jours de la période ;
-- actions Home Assistant pour automatiser des imports futurs.
+- **Tenant Usage** panel directly in the sidebar;
+- Data entry via the Home Assistant interface, without requiring YAML;
+- Water in m³;
+- heating in kWh, MWh, GJ, or allocation units;
+- separate time periods for water and heating;
+- overlap checking;
+- persistent storage in Home Assistant;
+- sensors for total, last period, and number of periods;
+- external historical statistics in Recorder;
+- even distribution of the total across the days of the period;
 
-## Compatibilité
 
-- Home Assistant Core **2026.7.4 ou plus récent** ;
-- Home Assistant OS sur Raspberry Pi 4 pris en charge ;
-- HACS pour l'installation et les mises à jour ;
-- aucune bibliothèque Python 
+## Compatibility
 
-## Installation avec HACS
+- Home Assistant Core **2026.7.4 or later**;
+- Home Assistant OS on a supported Raspberry Pi 4;
+- HACS for installation and updates;
+- No Python libraries required
 
-[![Ouvrir le dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TuRbUIEnCeRzZ&repository=ha-rental-consumption&category=integration)
+## Installation with HACS
 
-Installation manuelle dans HACS :
+[![Open the repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TuRbUIEnCeRzZ&repository=ha-rental-consumption&category=integration)
 
-1. Ouvrir **HACS**.
-2. Ouvrir le menu **⋮ → Dépôts personnalisés**.
-3. Ajouter `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption`.
-4. Choisir la catégorie **Intégration**.
-5. Rechercher **Consommation locative** et cliquer sur **Télécharger**.
-6. Redémarrer complètement Home Assistant.
-7. Ouvrir **Paramètres → Appareils et services → Ajouter une intégration**.
-8. Rechercher **Consommation locative**.
+Manual installation in HACS:
+
+1. Open **HACS**.
+2. Open the **⋮ → Custom Repositories** menu.
+3. Add `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption`.
+4. Select the **Integration** category.
+5. Search for **Rental Consumption** and click **Download**.
+6. Completely restart Home Assistant.
+7. Open **Settings → Devices and Services → Add an Integration**.
+8. Search for **Rental Consumption**.
 
 ## Configuration
 
-Lors de l'ajout, choisir :
+When adding, select:
 
-- le nom de l'appartement ;
-- l'unité utilisée sur le décompte de chauffage.
+- the apartment name;
+- the unit used on the heating bill.
 
-Après le redémarrage, ouvrir **Consommation locative** dans la barre latérale de Home Assistant. Le panneau permet de :
+After restarting, open **Tenant Usage** in the Home Assistant sidebar. The panel allows you to:
 
-- visualiser les totaux d'eau et de chauffage ;
-- ajouter une période d'eau ou de chauffage ;
-- consulter l'historique des périodes ;
-- supprimer une période ;
-- reconstruire les statistiques Recorder.
+- view water and heating totals;
+- add a water or heating period;
+- view the history of periods;
+- delete a period;
+- rebuild Recorder statistics.
 
-Le panneau est réservé aux administrateurs. Les mêmes opérations restent disponibles dans **Paramètres → Appareils et services → Consommation locative → Configurer**.
+This panel is reserved for administrators. The same operations are also available under **Settings → Devices and Services → Tenant Usage → Configure**.
 
-La date de fin est incluse. Deux périodes du même type ne peuvent pas se chevaucher.
-
-## Entités créées
+## Entities Created
 
 - `sensor.<appartement>_eau_total_importe`
 - `sensor.<appartement>_chauffage_total_importe`
@@ -69,20 +67,20 @@ La date de fin est incluse. Deux périodes du même type ne peuvent pas se cheva
 - `sensor.<appartement>_chauffage_derniere_periode`
 - `sensor.<appartement>_periodes_enregistrees`
 
-Les identifiants exacts dépendent du nom choisi et du registre d'entités.
+The exact identifiers depend on the chosen name and the entity registry.
 
-## Statistiques historiques
+## Historical Statistics
 
-Deux statistiques externes sont créées :
+Two external statistics are created:
 
 - `rental_consumption:<config_entry_id>_water`
 - `rental_consumption:<config_entry_id>_heating`
 
-L'identifiant exact apparaît dans l'attribut `external_statistic_id` du capteur total correspondant.
+The exact ID appears in the `external_statistic_id` attribute of the corresponding total sensor.
 
-> La consommation réelle à l'intérieur d'une période est inconnue. L'intégration répartit donc uniformément le total entre tous les jours. Le total est exact, mais la courbe journalière reste une estimation comptable.
+> The actual consumption within a period is unknown. Therefore, the integration distributes the total evenly across all days. The total is accurate, but the daily curve remains an accounting estimate.
 
-## Actions disponibles
+## Available Actions
 
 - `rental_consumption.add_period`
 - `rental_consumption.delete_period`
@@ -98,23 +96,23 @@ data:
   start_date: "2026-01-01"
   end_date: "2026-03-31"
   value: 21.7
-  note: "Décompte de la régie, 1er trimestre"
+  note: "Agency Statement, 1st Quarter"
 ```
 
-L'identifiant `config_entry_id` peut être obtenu dans **Outils de développement → Modèle** :
+The `config_entry_id` can be found under **Developer Tools → Template**:
 
 ```jinja2
 {{ config_entry_id('sensor.nom_de_votre_capteur_total') }}
 ```
 
-## Mise à jour
+## Update
 
-Les mises à jour publiées dans les releases GitHub apparaissent directement dans HACS. Après une mise à jour de l'intégration, redémarrer Home Assistant.
+Updates published in GitHub releases appear directly in HACS. After updating the integration, restart Home Assistant.
 
-## Données et sauvegardes
+## Data and Backups
 
-Les périodes sont conservées dans le stockage de Home Assistant et sont incluses dans les sauvegardes Home Assistant OS. Lorsqu'une période est ajoutée ou supprimée, les statistiques gérées par l'intégration sont reconstruites à partir des données enregistrées.
+Time periods are stored in Home Assistant’s storage and are included in Home Assistant OS backups. When a time period is added or removed, the statistics managed by the integration are rebuilt from the stored data.
 
-## Assistance
+## Support
 
-Les problèmes peuvent être signalés dans les [issues GitHub](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/issues).
+Issues can be reported in the [issues GitHub](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/issues).
