@@ -4,9 +4,24 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.0.0"
+VERSION: Final = "1.1.0"
 
 PLATFORMS: Final = ["sensor"]
+
+PANEL_URL_PATH: Final = "rental-consumption"
+PANEL_WEB_COMPONENT: Final = "rental-consumption-panel"
+PANEL_STATIC_URL: Final = "/rental_consumption_static"
+PANEL_TITLE: Final = "Consommation locative"
+PANEL_ICON: Final = "mdi:counter"
+
+DATA_FRONTEND_STATIC_REGISTERED: Final = f"{DOMAIN}_frontend_static_registered"
+DATA_FRONTEND_PANEL_REGISTERED: Final = f"{DOMAIN}_frontend_panel_registered"
+DATA_WEBSOCKET_REGISTERED: Final = f"{DOMAIN}_websocket_registered"
+
+WS_GET_DATA: Final = f"{DOMAIN}/get_data"
+WS_ADD_PERIOD: Final = f"{DOMAIN}/add_period"
+WS_DELETE_PERIOD: Final = f"{DOMAIN}/delete_period"
+WS_REBUILD_STATISTICS: Final = f"{DOMAIN}/rebuild_statistics"
 
 CONF_APARTMENT_NAME: Final = "apartment_name"
 CONF_HEATING_UNIT: Final = "heating_unit"

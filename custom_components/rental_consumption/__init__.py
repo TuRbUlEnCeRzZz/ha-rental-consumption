@@ -28,7 +28,9 @@ from .const import (
     TYPE_HEATING,
     TYPE_WATER,
 )
+from .frontend import async_register_frontend, async_unregister_frontend
 from .manager import RentalConsumptionManager
+from .websocket import async_register_websocket_commands
 from .models import PeriodValidationError
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -55,6 +57,7 @@ REBUILD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string})
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up domain services."""
     hass.data.setdefault(DOMAIN, {})
+    async_register_websocket_commands(hass)
 
     def get_manager(call: ServiceCall) -> RentalConsumptionManager:
         entry_id = str(call.data[CONF_ENTRY_ID])
@@ -118,6 +121,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = manager
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_frontend(hass)
     try:
         await manager.async_rebuild_statistics()
     except RuntimeError:
@@ -132,6 +136,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        if not hass.data[DOMAIN]:
+            async_unregister_frontend(hass)
     return unloaded
 
 

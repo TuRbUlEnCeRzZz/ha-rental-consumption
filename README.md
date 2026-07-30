@@ -1,13 +1,14 @@
 # Consommation locative pour Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
-[![Validate](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
-[![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
+[![Validate](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml)
+[![Version](https://img.shields.io/github/v/release/TuRbUIEnCeRzZ/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/releases)
 
 Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry Pi 4, destinée aux appartements locatifs sans compteurs individuels accessibles. Elle permet de saisir les consommations communiquées par la régie ou le bailleur pour une période déterminée.
 
 ## Fonctions
 
+- panneau **Consommation locative** directement dans la barre latérale ;
 - saisie depuis l'interface Home Assistant, sans YAML obligatoire ;
 - eau en m³ ;
 - chauffage en kWh, MWh, GJ ou unités de répartition ;
@@ -26,16 +27,19 @@ Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry 
 - HACS pour l'installation et les mises à jour ;
 - aucune bibliothèque Python externe.
 
+## Publication de ce modèle sur GitHub
+
+Lors du premier envoi, le workflow **Initialize repository** remplace automatiquement les marqueurs par le propriétaire et le nom réels du dépôt. Aucune commande locale n'est nécessaire. Les instructions détaillées se trouvent dans `GITHUB_SETUP.md`.
 
 ## Installation avec HACS
 
-[![Ouvrir le dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TuRbUlEnCeRzZz&repository=ha-rental-consumption&category=integration)
+[![Ouvrir le dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TuRbUIEnCeRzZ&repository=ha-rental-consumption&category=integration)
 
 Installation manuelle dans HACS :
 
 1. Ouvrir **HACS**.
 2. Ouvrir le menu **⋮ → Dépôts personnalisés**.
-3. Ajouter `https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption`.
+3. Ajouter `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption`.
 4. Choisir la catégorie **Intégration**.
 5. Rechercher **Consommation locative** et cliquer sur **Télécharger**.
 6. Redémarrer complètement Home Assistant.
@@ -49,16 +53,15 @@ Lors de l'ajout, choisir :
 - le nom de l'appartement ;
 - l'unité utilisée sur le décompte de chauffage.
 
-Pour enregistrer une consommation, ouvrir :
+Après le redémarrage, ouvrir **Consommation locative** dans la barre latérale de Home Assistant. Le panneau permet de :
 
-**Paramètres → Appareils et services → Consommation locative → Configurer**
+- visualiser les totaux d'eau et de chauffage ;
+- ajouter une période d'eau ou de chauffage ;
+- consulter l'historique des périodes ;
+- supprimer une période ;
+- reconstruire les statistiques Recorder.
 
-Puis choisir :
-
-- Ajouter une période d'eau ;
-- Ajouter une période de chauffage ;
-- Supprimer une période ;
-- Reconstruire les statistiques.
+Le panneau est réservé aux administrateurs. Les mêmes opérations restent disponibles dans **Paramètres → Appareils et services → Consommation locative → Configurer**.
 
 La date de fin est incluse. Deux périodes du même type ne peuvent pas se chevaucher.
 
@@ -118,4 +121,4 @@ Les périodes sont conservées dans le stockage de Home Assistant et sont inclus
 
 ## Assistance
 
-Les problèmes peuvent être signalés dans les [issues GitHub](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/issues).
+Les problèmes peuvent être signalés dans les [issues GitHub](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/issues).
