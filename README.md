@@ -1,89 +1,89 @@
-# Consommation locative pour Home Assistant
+# Rental Consumption for Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
-[![Validate](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/actions/workflows/validate.yml)
-[![Version](https://img.shields.io/github/v/release/TuRbUIEnCeRzZ/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption/releases)
+[![Validate](https://github.com/TuRbUzEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
+[![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
 
-Intégration personnalisée pour **Home Assistant OS**, notamment sur Raspberry Pi 4, destinée aux appartements locatifs sans compteurs individuels accessibles. Elle permet de saisir les consommations et coûts communiqués par une régie, un bailleur ou un GRD pour des périodes déterminées.
+Custom integration for **Home Assistant OS**, specifically on the Raspberry Pi 4, designed for rental apartments without accessible individual meters. It allows you to enter consumption and costs provided by a property management company, landlord, or distribution utility for specific time periods.
 
-## Fonctions
+## Features
 
-- saisie depuis un panneau dans la barre latérale ou depuis les options de l'intégration ;
-- eau totale et eau chaude en m³, enregistrées séparément ;
-- chauffage en kWh, MWh, GJ ou unités de répartition ;
-- électricité en kWh avec prix total facultatif ;
-- calcul du coût cumulé et du prix moyen pondéré de l'électricité ;
-- nom du GRD ou fournisseur saisi manuellement ;
-- répartition uniforme ou selon les degrés-jours d'un capteur extérieur ;
-- repli automatique sur une répartition uniforme si Recorder ne possède pas assez de températures ;
-- stockage persistant, capteurs Home Assistant et statistiques historiques externes ;
-- contrôle des chevauchements et reconstruction après correction ou suppression.
+- Data entry via a panel in the sidebar or through the integration’s options;
+- Total water and hot water in m³, recorded separately;
+- Heating in kWh, MWh, GJ, or allocation units;
+- Electricity in kWh with optional total price;
+- Calculation of cumulative cost and weighted average price of electricity;
+- DSO or supplier name entered manually;
+- Uniform allocation or allocation based on degree-days from an outdoor sensor;
+- Automatic fallback to uniform allocation if Recorder lacks sufficient temperature data;
+- Persistent storage, Home Assistant sensors, and external historical statistics;
+- Overlap checking and reconstruction after correction or deletion.
 
-## Compatibilité
+## Compatibility
 
-- Home Assistant Core **2026.7.4 ou plus récent** ;
-- Home Assistant OS sur Raspberry Pi 4 ;
-- installation et mises à jour avec HACS ;
-- aucune bibliothèque Python externe.
+- Home Assistant Core **2026.7.4 or newer**;
+- Home Assistant OS on Raspberry Pi 4;
+- installation and updates via HACS;
+- no external Python libraries.
 
-## Installation avec HACS
+## Installation with HACS
 
-1. Ouvrir **HACS → Intégrations → ⋮ → Dépôts personnalisés**.
-2. Ajouter `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption` en catégorie **Intégration**.
-3. Télécharger **Consommation locative**.
-4. Redémarrer Home Assistant.
-5. Ouvrir **Paramètres → Appareils et services → Ajouter une intégration**.
+1. Open **HACS → Integrations → ⋮ → Custom Repositories**.
+2. Add `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption` to the **Integration** category.
+3. Download **Tenant Consumption**.
+4. Restart Home Assistant.
+5. Open **Settings → Devices and Services → Add an Integration**.
 
-## Configuration du chauffage selon la température
+## Configuring Heating Based on Temperature
 
-Dans le panneau **Consommation locative → Réglages** :
+In the **Rental Consumption → Settings** panel:
 
-1. choisir **Selon la température extérieure (degrés-jours)** ;
-2. sélectionner un capteur extérieur ayant la classe d'appareil `temperature` ;
-3. choisir la température de base, par défaut **20 °C** ;
-4. enregistrer les réglages.
+1. Select **Based on Outdoor Temperature (degree-days)**;
+2. Select an outdoor sensor with the device class `temperature`;
+3. Choose the base temperature; the default is **20 °C**;
+4. Save the settings.
 
-Pour chaque jour, le poids est calculé avec :
+For each day, the weight is calculated using:
 
 ```text
-max(température de base − température extérieure moyenne, 0)
+max(base temperature − average outdoor temperature, 0)
 ```
 
-La consommation exacte de la période est ensuite distribuée proportionnellement à ces poids. Les jours sans température utilisent un poids moyen. Si aucune statistique journalière n'est disponible, la période reste uniforme. Le panneau indique le taux de couverture, la température moyenne et le nombre de périodes pondérées. Dès que trois périodes possèdent au moins 50 % de températures disponibles, il calcule aussi la corrélation de Pearson entre leur température extérieure moyenne et leur consommation journalière réellement facturée.
+The exact consumption for the period is then distributed proportionally based on these weights. Days without temperature data use an average weight. If no daily statistics are available, the period remains uniform. The panel displays the coverage rate, the average temperature, and the number of weighted periods. As soon as three periods have at least 50% of temperatures available, it also calculates the Pearson correlation between their average outdoor temperature and their actual daily billed consumption.
 
-> Le calcul utilise les statistiques journalières Recorder du capteur. Le capteur doit donc être conservé dans Recorder et idéalement disposer d'une classe d'état `measurement`. Une corrélation proche de `-1` indique que les périodes froides correspondent généralement à une consommation journalière plus forte ; elle ne prouve pas à elle seule une causalité ou une performance énergétique.
+> The calculation uses the sensor’s daily Recorder statistics. The sensor must therefore be retained in Recorder and ideally have a `measurement` status class. A correlation close to `-1` indicates that colder periods generally correspond to higher daily consumption; this alone does not prove causality or energy efficiency.
 
-## Électricité et prix
+## Electricity and Prices
 
-Une période d'électricité contient :
+An electricity period contains:
 
-- une consommation totale en kWh ;
-- un prix total facultatif dans la devise configurée ;
-- une note libre.
+- total consumption in kWh;
+- an optional total price in the configured currency;
+- a free-form note.
 
-L'intégration produit notamment :
+The integration produces, among other things:
 
-- le total d'électricité ;
-- le coût total connu ;
-- le prix moyen pondéré, par exemple en `CHF/kWh` ;
-- une statistique historique distincte pour le coût.
+- the total electricity consumption;
+- the known total cost;
+- the weighted average price, for example in `CHF/kWh`;
+- a separate historical statistic for the cost.
 
-## Eau chaude
+## Hot Water
 
-`Eau totale` et `Eau chaude` sont deux séries séparées. L'eau chaude n'est pas ajoutée une seconde fois au total d'eau. Cela permet d'enregistrer un sous-décompte d'eau chaude lorsqu'il est fourni par la régie.
+`Total Water` and `Hot Water` are two separate series. Hot water is not added a second time to the total water figure. This allows for recording a sub-meter reading for hot water when it is supplied by the utility company.
 
-## Entités principales
+## Main Entities
 
-- Eau totale – total importé
-- Eau chaude – total importé
-- Chauffage – total importé
-- Électricité – total importé
-- Électricité – coût total
-- Électricité – prix moyen
-- une entité « dernière période » pour chaque énergie
-- Périodes enregistrées
+- Total Water – total imported
+- Hot Water – Total Imported
+- Heating – Total Imported
+- Electricity – Total Imported
+- Electricity – Total Cost
+- Electricity – Average Price
+- A “last period” entity for each energy type
+- Recorded Periods
 
-## Statistiques externes
+## External Statistics
 
 - `rental_consumption:<entry_id>_water`
 - `rental_consumption:<entry_id>_hot_water`
@@ -91,33 +91,34 @@ L'intégration produit notamment :
 - `rental_consumption:<entry_id>_electricity`
 - `rental_consumption:<entry_id>_electricity_cost`
 
-## Mise à jour depuis une version 1.0 ou 1.1
+## Updating from version 1.0 or 1.1
 
-Les périodes déjà enregistrées restent compatibles. Après la mise à jour HACS :
+Periods that have already been saved remain compatible. After updating HACS:
 
-1. redémarrer complètement Home Assistant ;
-2. ouvrir le panneau latéral ;
-3. enregistrer le GRD et, si souhaité, le capteur extérieur ;
-4. lancer **Reconstruire les statistiques**.
+1. Fully restart Home Assistant;
+2. Open the sidebar;
+3. Register the utility provider and, if desired, the outdoor sensor;
+4. Run **Rebuild Statistics**.
 
-## Actions disponibles
+## Available Actions
 
 - `rental_consumption.add_period`
 - `rental_consumption.delete_period`
 - `rental_consumption.rebuild_statistics`
 
-Exemple pour l'électricité :
+Example for electricity:
 
 ```yaml
 action: rental_consumption.add_period
 data:
-  config_entry_id: "0123456789abcdef0123456789abcdef"
-  consumption_type: electricity
-  start_date: "2026-05-01"
-  end_date: "2026-07-31"
+  config_entry_id: “0123456789abcdef0123456789abcdef”
+  
+consumption_type: electricity
+  start_date: “2026-05-01”
+  end_date: “2026-07-31”
   value: 1320.5
   cost: 387.40
-  note: "Décompte trimestriel du GRD"
+  note: “Quarterly bill from the DSO”
 ```
 
 ## Données et sauvegardes
