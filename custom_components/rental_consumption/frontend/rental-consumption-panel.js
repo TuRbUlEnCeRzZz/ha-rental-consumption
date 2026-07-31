@@ -1,7 +1,7 @@
 const TRANSLATIONS = {
   fr: {
     title: "Consommation locative",
-    subtitle: "Entrer ",
+    subtitle: "Entrer les montants totaux de consommation fournis par votre gérance ou votre bailleur.",
     apartment: "Appartement",
     water: "Eau",
     heating: "Chauffage",
