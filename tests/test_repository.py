@@ -22,16 +22,18 @@ def test_sidebar_panel_bundle_is_shipped() -> None:
     content = panel.read_text(encoding="utf-8")
     assert 'customElements.define("rental-consumption-panel"' in content
     assert "rental_consumption/get_data" in content
+    assert "rental_consumption/update_settings" in content
+    assert "hot_water" in content
+    assert "electricity" in content
+    assert "temperature_correlation" in content
 
 
-def test_manifest_declares_http_dependency() -> None:
-    """The sidebar static path directly uses the HTTP integration."""
+def test_manifest_declares_dependencies() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert "http" in manifest["dependencies"]
+    assert {"frontend", "http", "recorder"}.issubset(manifest["dependencies"])
 
 
 def test_setup_does_not_wait_for_recorder_statistics() -> None:
-    """The config entry setup must not deadlock with Recorder startup."""
     source = (INTEGRATION / "__init__.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     setup_entry = next(
@@ -50,3 +52,15 @@ def test_setup_does_not_wait_for_recorder_statistics() -> None:
     assert awaited_rebuilds == []
     assert "async_at_started" in source
     assert "async_create_background_task" in source
+
+
+def test_translations_contain_all_new_entities() -> None:
+    strings = json.loads((INTEGRATION / "strings.json").read_text(encoding="utf-8"))
+    entities = strings["entity"]["sensor"]
+    for key in (
+        "hot_water_imported_total",
+        "electricity_imported_total",
+        "electricity_cost_total",
+        "electricity_average_price",
+    ):
+        assert key in entities

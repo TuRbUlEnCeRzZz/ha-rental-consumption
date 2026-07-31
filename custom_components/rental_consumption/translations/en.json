@@ -4,15 +4,22 @@
     "step": {
       "user": {
         "title": "Create apartment tracking",
-        "description": "Record consumption received on periodic statements, even without access to individual meters.",
+        "description": "Store periodic bills without accessible meters.",
         "data": {
           "apartment_name": "Apartment name",
-          "heating_unit": "Heating unit"
+          "heating_unit": "Heating unit",
+          "grid_operator": "Grid operator / electricity supplier",
+          "currency": "Currency"
+        },
+        "data_description": {
+          "heating_unit": "Unit shown on the bill.",
+          "grid_operator": "Manually entered name.",
+          "currency": "For example CHF."
         }
       }
     },
     "abort": {
-      "already_configured": "A tracker with this name already exists."
+      "already_configured": "A tracking entry with this name already exists."
     },
     "error": {
       "invalid_name": "The apartment name cannot be empty."
@@ -23,69 +30,131 @@
       "init": {
         "title": "Manage consumption",
         "menu_options": {
-          "add_water": "Add water period",
+          "add_water": "Add total water period",
+          "add_hot_water": "Add hot water period",
           "add_heating": "Add heating period",
+          "add_electricity": "Add electricity period",
+          "settings": "Configure grid operator and heating",
           "delete_period": "Delete a period",
           "rebuild_statistics": "Rebuild statistics"
         }
       },
       "add_water": {
-        "title": "Add water consumption",
-        "description": "The value is distributed uniformly across the inclusive period.",
+        "title": "Add total water consumption",
+        "description": "The value is distributed uniformly.",
         "data": {
           "start_date": "Start date",
-          "end_date": "End date (inclusive)",
+          "end_date": "End date included",
           "value": "Total consumption (m³)",
+          "note": "Optional note"
+        }
+      },
+      "add_hot_water": {
+        "title": "Add hot water consumption",
+        "description": "Hot water remains separate from total water.",
+        "data": {
+          "start_date": "Start date",
+          "end_date": "End date included",
+          "value": "Hot water (m³)",
           "note": "Optional note"
         }
       },
       "add_heating": {
         "title": "Add heating consumption",
-        "description": "The value is distributed uniformly across the inclusive period.",
+        "description": "Distribution uses the configured mode.",
         "data": {
           "start_date": "Start date",
-          "end_date": "End date (inclusive)",
+          "end_date": "End date included",
           "value": "Total consumption",
           "note": "Optional note"
         }
       },
+      "add_electricity": {
+        "title": "Add electricity consumption",
+        "description": "Total cost is optional.",
+        "data": {
+          "start_date": "Start date",
+          "end_date": "End date included",
+          "value": "Consumption (kWh)",
+          "cost": "Total period cost",
+          "note": "Optional note"
+        }
+      },
+      "settings": {
+        "title": "Billing settings",
+        "description": "The outdoor sensor must have long-term Recorder statistics.",
+        "data": {
+          "grid_operator": "Grid operator / supplier",
+          "currency": "Currency",
+          "heating_distribution": "Heating distribution",
+          "outdoor_temperature_sensor": "Outdoor sensor entity",
+          "heating_base_temperature": "Base temperature"
+        },
+        "data_description": {
+          "outdoor_temperature_sensor": "For example sensor.outdoor_temperature.",
+          "heating_base_temperature": "Heating-degree-day base, usually 20 °C."
+        }
+      },
       "delete_period": {
         "title": "Delete a period",
+        "description": "Deletion rebuilds the history.",
         "data": {
           "period_id": "Period"
         }
       },
       "rebuild_statistics": {
         "title": "Rebuild statistics",
-        "description": "Confirm to replace external statistics from the currently stored periods."
+        "description": "Replace statistics with data calculated from stored periods."
       }
     },
     "error": {
       "end_before_start": "The end date must be on or after the start date.",
       "future_end": "The end date cannot be in the future.",
       "invalid_value": "Consumption must be greater than zero.",
+      "invalid_cost": "Cost cannot be negative.",
       "overlap": "This period overlaps an existing period of the same type.",
       "period_not_found": "The selected period no longer exists.",
-      "recorder_unavailable": "The Home Assistant Recorder database is unavailable."
+      "recorder_unavailable": "Recorder is unavailable.",
+      "invalid_distribution": "The distribution mode is invalid.",
+      "invalid_base_temperature": "Base temperature must be between 5 and 30 °C.",
+      "temperature_sensor_required": "Select an outdoor temperature sensor."
     },
     "abort": {
-      "not_loaded": "The integration entry is not loaded.",
-      "no_periods": "No periods have been stored yet."
+      "not_loaded": "The entry is not loaded.",
+      "no_periods": "No period is stored."
     }
   },
   "entity": {
     "sensor": {
       "water_imported_total": {
-        "name": "Water imported total"
+        "name": "Total water – imported total"
+      },
+      "hot_water_imported_total": {
+        "name": "Hot water – imported total"
       },
       "heating_imported_total": {
-        "name": "Heating imported total"
+        "name": "Heating – imported total"
+      },
+      "electricity_imported_total": {
+        "name": "Electricity – imported total"
       },
       "water_last_period": {
-        "name": "Water latest period"
+        "name": "Total water – latest period"
+      },
+      "hot_water_last_period": {
+        "name": "Hot water – latest period"
       },
       "heating_last_period": {
-        "name": "Heating latest period"
+        "name": "Heating – latest period"
+      },
+      "electricity_last_period": {
+        "name": "Electricity – latest period"
+      },
+      "electricity_cost_total": {
+        "name": "Electricity – total cost"
+      },
+      "electricity_average_price": {
+        "name": "Electricity – average price"
       },
       "period_count": {
         "name": "Stored periods"

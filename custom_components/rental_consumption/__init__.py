@@ -15,6 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.start import async_at_started
 
 from .const import (
+    CONF_COST,
     CONF_CONSUMPTION_TYPE,
     CONF_END_DATE,
     CONF_ENTRY_ID,
@@ -22,18 +23,17 @@ from .const import (
     CONF_PERIOD_ID,
     CONF_START_DATE,
     CONF_VALUE,
+    CONSUMPTION_TYPES,
     DOMAIN,
     PLATFORMS,
     SERVICE_ADD_PERIOD,
     SERVICE_DELETE_PERIOD,
     SERVICE_REBUILD_STATISTICS,
-    TYPE_HEATING,
-    TYPE_WATER,
 )
 from .frontend import async_register_frontend, async_unregister_frontend
 from .manager import RentalConsumptionManager
-from .websocket import async_register_websocket_commands
 from .models import PeriodValidationError
+from .websocket import async_register_websocket_commands
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,10 +42,11 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 ADD_PERIOD_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
-        vol.Required(CONF_CONSUMPTION_TYPE): vol.In([TYPE_WATER, TYPE_HEATING]),
+        vol.Required(CONF_CONSUMPTION_TYPE): vol.In(CONSUMPTION_TYPES),
         vol.Required(CONF_START_DATE): cv.date,
         vol.Required(CONF_END_DATE): cv.date,
         vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
+        vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Optional(CONF_NOTE, default=""): cv.string,
     }
 )
@@ -81,6 +82,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 _as_date(call.data[CONF_END_DATE]),
                 float(call.data[CONF_VALUE]),
                 str(call.data.get(CONF_NOTE, "")),
+                None if CONF_COST not in call.data else float(call.data[CONF_COST]),
             )
         except PeriodValidationError as err:
             raise HomeAssistantError(err.code) from err
@@ -163,11 +165,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unloaded
 
 
-
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove stored periods and external statistics when the entry is deleted."""
     manager = RentalConsumptionManager.create(hass, entry)
     await manager.async_remove_data()
+
 
 def _as_date(value: date | str) -> date:
     """Normalize service date input."""

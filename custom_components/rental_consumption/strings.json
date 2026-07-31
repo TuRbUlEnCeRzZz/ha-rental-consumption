@@ -4,13 +4,17 @@
     "step": {
       "user": {
         "title": "Créer le suivi de l'appartement",
-        "description": "Enregistrez des consommations reçues sur des décomptes périodiques, même sans accès aux compteurs.",
+        "description": "Enregistrez des décomptes périodiques même sans accès aux compteurs.",
         "data": {
           "apartment_name": "Nom de l'appartement",
-          "heating_unit": "Unité du chauffage"
+          "heating_unit": "Unité du chauffage",
+          "grid_operator": "GRD / fournisseur d'électricité",
+          "currency": "Devise"
         },
         "data_description": {
-          "heating_unit": "Choisissez l'unité telle qu'elle figure sur le décompte du bailleur ou de la régie."
+          "heating_unit": "Unité figurant sur le décompte.",
+          "grid_operator": "Nom saisi manuellement, par exemple Groupe E.",
+          "currency": "Par exemple CHF."
         }
       }
     },
@@ -26,15 +30,18 @@
       "init": {
         "title": "Gérer les consommations",
         "menu_options": {
-          "add_water": "Ajouter une période d'eau",
+          "add_water": "Ajouter une période d'eau totale",
+          "add_hot_water": "Ajouter une période d'eau chaude",
           "add_heating": "Ajouter une période de chauffage",
+          "add_electricity": "Ajouter une période d'électricité",
+          "settings": "Configurer le GRD et le chauffage",
           "delete_period": "Supprimer une période",
           "rebuild_statistics": "Reconstruire les statistiques"
         }
       },
       "add_water": {
-        "title": "Ajouter une consommation d'eau",
-        "description": "La valeur est répartie uniformément sur chaque jour de la période afin de créer un historique exploitable.",
+        "title": "Ajouter une consommation d'eau totale",
+        "description": "La valeur est répartie uniformément sur la période.",
         "data": {
           "start_date": "Date de début",
           "end_date": "Date de fin incluse",
@@ -42,9 +49,19 @@
           "note": "Note facultative"
         }
       },
+      "add_hot_water": {
+        "title": "Ajouter une consommation d'eau chaude",
+        "description": "L'eau chaude reste séparée du total d'eau.",
+        "data": {
+          "start_date": "Date de début",
+          "end_date": "Date de fin incluse",
+          "value": "Eau chaude (m³)",
+          "note": "Note facultative"
+        }
+      },
       "add_heating": {
         "title": "Ajouter une consommation de chauffage",
-        "description": "La valeur est répartie uniformément sur chaque jour de la période afin de créer un historique exploitable.",
+        "description": "La répartition utilise le mode configuré.",
         "data": {
           "start_date": "Date de début",
           "end_date": "Date de fin incluse",
@@ -52,44 +69,92 @@
           "note": "Note facultative"
         }
       },
+      "add_electricity": {
+        "title": "Ajouter une consommation d'électricité",
+        "description": "Le prix total est facultatif.",
+        "data": {
+          "start_date": "Date de début",
+          "end_date": "Date de fin incluse",
+          "value": "Consommation (kWh)",
+          "cost": "Prix total de la période",
+          "note": "Note facultative"
+        }
+      },
+      "settings": {
+        "title": "Réglages des décomptes",
+        "description": "Le capteur extérieur doit disposer de statistiques à long terme dans Recorder.",
+        "data": {
+          "grid_operator": "GRD / fournisseur",
+          "currency": "Devise",
+          "heating_distribution": "Répartition du chauffage",
+          "outdoor_temperature_sensor": "Entité du capteur extérieur",
+          "heating_base_temperature": "Température de base"
+        },
+        "data_description": {
+          "outdoor_temperature_sensor": "Par exemple sensor.temperature_exterieure.",
+          "heating_base_temperature": "Base des degrés-jours, généralement 20 °C."
+        }
+      },
       "delete_period": {
         "title": "Supprimer une période",
-        "description": "La suppression reconstruit automatiquement tout l'historique de la consommation concernée.",
+        "description": "La suppression reconstruit l'historique.",
         "data": {
           "period_id": "Période"
         }
       },
       "rebuild_statistics": {
         "title": "Reconstruire les statistiques",
-        "description": "Confirmez pour remplacer les statistiques externes par celles calculées depuis les périodes actuellement stockées."
+        "description": "Remplace les statistiques par celles calculées depuis les périodes stockées."
       }
     },
     "error": {
       "end_before_start": "La date de fin doit être postérieure ou égale à la date de début.",
       "future_end": "La date de fin ne peut pas être dans le futur.",
       "invalid_value": "La consommation doit être supérieure à zéro.",
+      "invalid_cost": "Le prix ne peut pas être négatif.",
       "overlap": "Cette période chevauche une période existante du même type.",
       "period_not_found": "La période sélectionnée n'existe plus.",
-      "recorder_unavailable": "La base de données Recorder de Home Assistant n'est pas disponible."
+      "recorder_unavailable": "Recorder n'est pas disponible.",
+      "invalid_distribution": "Le mode de répartition est invalide.",
+      "invalid_base_temperature": "La température de base doit être comprise entre 5 et 30 °C.",
+      "temperature_sensor_required": "Sélectionnez un capteur de température extérieure."
     },
     "abort": {
-      "not_loaded": "L'entrée d'intégration n'est pas chargée.",
-      "no_periods": "Aucune période n'est encore enregistrée."
+      "not_loaded": "L'entrée n'est pas chargée.",
+      "no_periods": "Aucune période n'est enregistrée."
     }
   },
   "entity": {
     "sensor": {
       "water_imported_total": {
-        "name": "Eau – total importé"
+        "name": "Eau totale – total importé"
+      },
+      "hot_water_imported_total": {
+        "name": "Eau chaude – total importé"
       },
       "heating_imported_total": {
         "name": "Chauffage – total importé"
       },
+      "electricity_imported_total": {
+        "name": "Électricité – total importé"
+      },
       "water_last_period": {
-        "name": "Eau – dernière période"
+        "name": "Eau totale – dernière période"
+      },
+      "hot_water_last_period": {
+        "name": "Eau chaude – dernière période"
       },
       "heating_last_period": {
         "name": "Chauffage – dernière période"
+      },
+      "electricity_last_period": {
+        "name": "Électricité – dernière période"
+      },
+      "electricity_cost_total": {
+        "name": "Électricité – coût total"
+      },
+      "electricity_average_price": {
+        "name": "Électricité – prix moyen"
       },
       "period_count": {
         "name": "Périodes enregistrées"

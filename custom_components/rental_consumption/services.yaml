@@ -1,6 +1,6 @@
 add_period:
   name: Ajouter une période
-  description: Ajoute une consommation d'eau ou de chauffage sur une période inclusive.
+  description: Ajoute une consommation d'eau, d'eau chaude, de chauffage ou d'électricité sur une période inclusive.
   fields:
     config_entry_id:
       name: Identifiant de l'entrée
@@ -14,10 +14,14 @@ add_period:
       selector:
         select:
           options:
-            - label: Eau
+            - label: Eau totale
               value: water
+            - label: Eau chaude
+              value: hot_water
             - label: Chauffage
               value: heating
+            - label: Électricité
+              value: electricity
     start_date:
       name: Début
       required: true
@@ -34,6 +38,16 @@ add_period:
       selector:
         number:
           min: 0.001
+          max: 1000000000
+          step: any
+          mode: box
+    cost:
+      name: Prix total
+      description: Prix total facultatif, principalement pour l'électricité.
+      required: false
+      selector:
+        number:
+          min: 0
           max: 1000000000
           step: any
           mode: box
