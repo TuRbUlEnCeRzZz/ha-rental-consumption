@@ -29,7 +29,7 @@ Custom integration for **Home Assistant OS**, specifically on the Raspberry Pi 4
 ## Installation with HACS
 
 1. Open **HACS → Integrations → ⋮ → Custom Repositories**.
-2. Add `https://github.com/TuRbUIEnCeRzZ/ha-rental-consumption` to the **Integration** category.
+2. Add `https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption` to the **Integration** category.
 3. Download **Tenant Consumption**.
 4. Restart Home Assistant.
 5. Open **Settings → Devices and Services → Add an Integration**.
