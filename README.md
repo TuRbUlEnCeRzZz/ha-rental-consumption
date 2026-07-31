@@ -121,6 +121,6 @@ consumption_type: electricity
   note: “Quarterly bill from the DSO”
 ```
 
-## Données et sauvegardes
+## Data and Backups
 
-Les périodes sont stockées dans le stockage persistant de Home Assistant et sont incluses dans les sauvegardes Home Assistant OS.
+Time periods are stored in Home Assistant's persistent storage and are included in Home Assistant OS backups.
