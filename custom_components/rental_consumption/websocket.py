@@ -36,6 +36,7 @@ from .const import (
     WS_DELETE_PERIOD,
     WS_GET_DATA,
     WS_REBUILD_STATISTICS,
+    WS_UPDATE_PERIOD,
     WS_UPDATE_SETTINGS,
 )
 from .manager import RentalConsumptionManager
@@ -49,16 +50,19 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     if hass.data.get(DATA_WEBSOCKET_REGISTERED):
         return
 
-    websocket_api.async_register_command(hass, websocket_get_data)
-    websocket_api.async_register_command(hass, websocket_add_period)
-    websocket_api.async_register_command(hass, websocket_delete_period)
-    websocket_api.async_register_command(hass, websocket_rebuild_statistics)
-    websocket_api.async_register_command(hass, websocket_update_settings)
+    for command in (
+        websocket_get_data,
+        websocket_add_period,
+        websocket_update_period,
+        websocket_delete_period,
+        websocket_rebuild_statistics,
+        websocket_update_settings,
+    ):
+        websocket_api.async_register_command(hass, command)
     hass.data[DATA_WEBSOCKET_REGISTERED] = True
 
 
 def _manager(hass: HomeAssistant, entry_id: str) -> RentalConsumptionManager | None:
-    """Return a loaded manager, or None when its config entry is unavailable."""
     manager = hass.data.get(DOMAIN, {}).get(entry_id)
     return manager if isinstance(manager, RentalConsumptionManager) else None
 
@@ -91,6 +95,14 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
         key=lambda period: (period.end_date, period.start_date, period.period_id),
         reverse=True,
     )
+    costs = {
+        metric: {
+            "total": manager.total_cost(metric),
+            "average_unit_price": manager.average_unit_price(metric),
+            "statistic_id": manager.cost_statistic_id(metric),
+        }
+        for metric in CONSUMPTION_TYPES
+    }
     return {
         "entry_id": manager.entry.entry_id,
         "title": manager.entry.title,
@@ -106,19 +118,24 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
             TYPE_HOT_WATER: manager.unit(TYPE_HOT_WATER),
             TYPE_HEATING: manager.unit(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.unit(TYPE_ELECTRICITY),
+            "currency": manager.currency,
+            "unit_prices": {
+                metric: f"{manager.currency}/{manager.unit(metric)}"
+                for metric in CONSUMPTION_TYPES
+            },
+            # Compatibility aliases used by the v1.2 panel.
             "electricity_cost": manager.currency,
-            "electricity_unit_price": (
-                f"{manager.currency}/{manager.unit(TYPE_ELECTRICITY)}"
-            ),
+            "electricity_unit_price": f"{manager.currency}/{manager.unit(TYPE_ELECTRICITY)}",
         },
         "totals": {
             TYPE_WATER: manager.total(TYPE_WATER),
             TYPE_HOT_WATER: manager.total(TYPE_HOT_WATER),
             TYPE_HEATING: manager.total(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.total(TYPE_ELECTRICITY),
-            "electricity_cost": manager.total_cost(),
-            "electricity_average_price": manager.average_unit_price(),
+            "electricity_cost": costs[TYPE_ELECTRICITY]["total"],
+            "electricity_average_price": costs[TYPE_ELECTRICITY]["average_unit_price"],
         },
+        "costs": costs,
         "counts": {
             "all": manager.count(),
             TYPE_WATER: manager.count(TYPE_WATER),
@@ -131,7 +148,11 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
             TYPE_HOT_WATER: manager.statistic_id(TYPE_HOT_WATER),
             TYPE_HEATING: manager.statistic_id(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.statistic_id(TYPE_ELECTRICITY),
-            "electricity_cost": manager.cost_statistic_id(),
+            "costs": {
+                metric: manager.cost_statistic_id(metric)
+                for metric in CONSUMPTION_TYPES
+            },
+            "electricity_cost": manager.cost_statistic_id(TYPE_ELECTRICITY),
         },
         "heating_analysis": manager.heating_analysis,
         "periods": [_serialize_period(manager, period) for period in periods],
@@ -158,21 +179,21 @@ def websocket_get_data(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Return all configured apartments and their stored periods."""
     connection.send_result(msg["id"], {"entries": _all_entries(hass)})
 
 
+_PERIOD_SCHEMA = {
+    vol.Required(CONF_CONSUMPTION_TYPE): vol.In(CONSUMPTION_TYPES),
+    vol.Required(CONF_START_DATE): cv.date,
+    vol.Required(CONF_END_DATE): cv.date,
+    vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
+    vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_NOTE, default=""): cv.string,
+}
+
+
 @websocket_api.websocket_command(
-    {
-        vol.Required("type"): WS_ADD_PERIOD,
-        vol.Required(CONF_ENTRY_ID): cv.string,
-        vol.Required(CONF_CONSUMPTION_TYPE): vol.In(CONSUMPTION_TYPES),
-        vol.Required(CONF_START_DATE): cv.date,
-        vol.Required(CONF_END_DATE): cv.date,
-        vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
-        vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
-        vol.Optional(CONF_NOTE, default=""): cv.string,
-    }
+    {vol.Required("type"): WS_ADD_PERIOD, vol.Required(CONF_ENTRY_ID): cv.string, **_PERIOD_SCHEMA}
 )
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -181,7 +202,6 @@ async def websocket_add_period(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Add one billing period from the sidebar panel."""
     manager = _manager(hass, msg[CONF_ENTRY_ID])
     if manager is None:
         connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
@@ -198,7 +218,41 @@ async def websocket_add_period(
     except PeriodValidationError as err:
         connection.send_error(msg["id"], err.code, err.code)
         return
+    connection.send_result(msg["id"], _serialize_manager(manager))
 
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_UPDATE_PERIOD,
+        vol.Required(CONF_ENTRY_ID): cv.string,
+        vol.Required(CONF_PERIOD_ID): cv.string,
+        **_PERIOD_SCHEMA,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_update_period(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    manager = _manager(hass, msg[CONF_ENTRY_ID])
+    if manager is None:
+        connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
+        return
+    try:
+        await manager.async_update_period(
+            str(msg[CONF_PERIOD_ID]),
+            msg[CONF_CONSUMPTION_TYPE],
+            _as_date(msg[CONF_START_DATE]),
+            _as_date(msg[CONF_END_DATE]),
+            float(msg[CONF_VALUE]),
+            str(msg.get(CONF_NOTE, "")),
+            None if CONF_COST not in msg else float(msg[CONF_COST]),
+        )
+    except PeriodValidationError as err:
+        connection.send_error(msg["id"], err.code, err.code)
+        return
     connection.send_result(msg["id"], _serialize_manager(manager))
 
 
@@ -216,7 +270,6 @@ async def websocket_delete_period(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Delete one billing period from the sidebar panel."""
     manager = _manager(hass, msg[CONF_ENTRY_ID])
     if manager is None:
         connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
@@ -226,15 +279,11 @@ async def websocket_delete_period(
     except PeriodValidationError as err:
         connection.send_error(msg["id"], err.code, err.code)
         return
-
     connection.send_result(msg["id"], _serialize_manager(manager))
 
 
 @websocket_api.websocket_command(
-    {
-        vol.Required("type"): WS_REBUILD_STATISTICS,
-        vol.Required(CONF_ENTRY_ID): cv.string,
-    }
+    {vol.Required("type"): WS_REBUILD_STATISTICS, vol.Required(CONF_ENTRY_ID): cv.string}
 )
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -243,7 +292,6 @@ async def websocket_rebuild_statistics(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Rebuild external statistics from all stored periods."""
     manager = _manager(hass, msg[CONF_ENTRY_ID])
     if manager is None:
         connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
@@ -251,11 +299,8 @@ async def websocket_rebuild_statistics(
     try:
         await manager.async_rebuild_statistics()
     except (HomeAssistantError, RuntimeError):
-        connection.send_error(
-            msg["id"], "recorder_unavailable", "recorder_unavailable"
-        )
+        connection.send_error(msg["id"], "recorder_unavailable", "recorder_unavailable")
         return
-
     connection.send_result(msg["id"], _serialize_manager(manager))
 
 
@@ -279,7 +324,6 @@ async def websocket_update_settings(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Update GRD, currency and heating distribution settings."""
     manager = _manager(hass, msg[CONF_ENTRY_ID])
     if manager is None:
         connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
@@ -289,23 +333,17 @@ async def websocket_update_settings(
             grid_operator=str(msg[CONF_GRID_OPERATOR]),
             currency=str(msg[CONF_CURRENCY]),
             heating_distribution=str(msg[CONF_HEATING_DISTRIBUTION]),
-            outdoor_temperature_sensor=str(
-                msg[CONF_OUTDOOR_TEMPERATURE_SENSOR]
-            ),
+            outdoor_temperature_sensor=str(msg[CONF_OUTDOOR_TEMPERATURE_SENSOR]),
             heating_base_temperature=float(msg[CONF_HEATING_BASE_TEMPERATURE]),
         )
     except PeriodValidationError as err:
         connection.send_error(msg["id"], err.code, err.code)
         return
     except (HomeAssistantError, RuntimeError):
-        connection.send_error(
-            msg["id"], "recorder_unavailable", "recorder_unavailable"
-        )
+        connection.send_error(msg["id"], "recorder_unavailable", "recorder_unavailable")
         return
-
     connection.send_result(msg["id"], _serialize_manager(manager))
 
 
 def _as_date(value: date | str) -> date:
-    """Normalize a WebSocket date value."""
     return value if isinstance(value, date) else date.fromisoformat(str(value))

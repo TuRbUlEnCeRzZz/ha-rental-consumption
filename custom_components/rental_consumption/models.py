@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from math import sqrt
@@ -70,9 +70,30 @@ class ConsumptionPeriod:
             note=note.strip(),
         )
 
+    def updated(
+        self,
+        *,
+        consumption_type: ConsumptionType,
+        start_date: date,
+        end_date: date,
+        value: float,
+        note: str = "",
+        cost: float | None = None,
+    ) -> "ConsumptionPeriod":
+        """Return a corrected copy while retaining the stable period id."""
+        return replace(
+            self,
+            consumption_type=consumption_type,
+            start_date=start_date,
+            end_date=end_date,
+            value=float(value),
+            cost=None if cost is None else float(cost),
+            note=note.strip(),
+        )
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ConsumptionPeriod":
-        """Restore a period from storage, including v1.0/v1.1 records."""
+        """Restore a period from storage, including older records."""
         raw_cost = data.get("cost")
         return cls(
             period_id=str(data["period_id"]),
@@ -96,8 +117,10 @@ def validate_period(
     candidate: ConsumptionPeriod,
     existing_periods: list[ConsumptionPeriod],
     today: date,
+    *,
+    ignore_period_id: str | None = None,
 ) -> None:
-    """Validate dates, values and overlap for a new period."""
+    """Validate dates, values and overlap for a new or edited period."""
     if candidate.end_date < candidate.start_date:
         raise PeriodValidationError("end_before_start")
     if candidate.end_date > today:
@@ -108,6 +131,8 @@ def validate_period(
         raise PeriodValidationError("invalid_cost")
 
     for existing in existing_periods:
+        if ignore_period_id and existing.period_id == ignore_period_id:
+            continue
         if existing.consumption_type != candidate.consumption_type:
             continue
         overlaps = not (

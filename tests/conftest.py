@@ -30,11 +30,5 @@ def _load_module(name: str, path: Path) -> None:
 
 _ensure_package("custom_components", COMPONENT_ROOT)
 _ensure_package("custom_components.rental_consumption", INTEGRATION_ROOT)
-_load_module(
-    "custom_components.rental_consumption.const",
-    INTEGRATION_ROOT / "const.py",
-)
-_load_module(
-    "custom_components.rental_consumption.models",
-    INTEGRATION_ROOT / "models.py",
-)
+_load_module("custom_components.rental_consumption.const", INTEGRATION_ROOT / "const.py")
+_load_module("custom_components.rental_consumption.models", INTEGRATION_ROOT / "models.py")

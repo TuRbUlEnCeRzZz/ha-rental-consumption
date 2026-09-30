@@ -7,13 +7,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import (
-    DOMAIN,
-    TYPE_ELECTRICITY,
-    TYPE_HEATING,
-    TYPE_HOT_WATER,
-    TYPE_WATER,
-)
+from .const import CONSUMPTION_TYPES, DOMAIN
 from .manager import RentalConsumptionManager
 
 
@@ -23,22 +17,16 @@ async def async_get_config_entry_diagnostics(
     """Return non-secret diagnostics."""
     manager: RentalConsumptionManager = hass.data[DOMAIN][entry.entry_id]
     return {
-        "entry": {
-            "title": entry.title,
-            "data": dict(entry.data),
-        },
+        "entry": {"title": entry.title, "data": dict(entry.data)},
         "period_counts": {
-            "water": manager.count(TYPE_WATER),
-            "hot_water": manager.count(TYPE_HOT_WATER),
-            "heating": manager.count(TYPE_HEATING),
-            "electricity": manager.count(TYPE_ELECTRICITY),
+            metric: manager.count(metric) for metric in CONSUMPTION_TYPES
         },
         "statistics": {
-            "water": manager.statistic_id(TYPE_WATER),
-            "hot_water": manager.statistic_id(TYPE_HOT_WATER),
-            "heating": manager.statistic_id(TYPE_HEATING),
-            "electricity": manager.statistic_id(TYPE_ELECTRICITY),
-            "electricity_cost": manager.cost_statistic_id(),
+            metric: {
+                "consumption": manager.statistic_id(metric),
+                "cost": manager.cost_statistic_id(metric),
+            }
+            for metric in CONSUMPTION_TYPES
         },
         "heating_analysis": manager.heating_analysis,
         "periods": [period.to_dict() for period in manager.periods],

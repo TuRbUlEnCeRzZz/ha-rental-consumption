@@ -1,10 +1,9 @@
 add_period:
-  name: Ajouter une période
-  description: Ajoute une consommation d'eau, d'eau chaude, de chauffage ou d'électricité sur une période inclusive.
+  name: Add a period
+  description: Add water, hot-water, heating or electricity consumption over an inclusive historical period.
   fields:
     config_entry_id:
-      name: Identifiant de l'entrée
-      description: Identifiant de l'entrée Consommation locative.
+      name: Config entry ID
       required: true
       selector:
         text:
@@ -14,26 +13,26 @@ add_period:
       selector:
         select:
           options:
-            - label: Eau totale
+            - label: Total water
               value: water
-            - label: Eau chaude
+            - label: Hot water
               value: hot_water
-            - label: Chauffage
+            - label: Heating
               value: heating
-            - label: Électricité
+            - label: Electricity
               value: electricity
     start_date:
-      name: Début
+      name: Start
       required: true
       selector:
         date:
     end_date:
-      name: Fin
+      name: End
       required: true
       selector:
         date:
     value:
-      name: Consommation
+      name: Consumption
       required: true
       selector:
         number:
@@ -42,8 +41,71 @@ add_period:
           step: any
           mode: box
     cost:
-      name: Prix total
-      description: Prix total facultatif, principalement pour l'électricité.
+      name: Total cost
+      description: Optional total cost for this billing period.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1000000000
+          step: any
+          mode: box
+    note:
+      name: Note
+      required: false
+      selector:
+        text:
+          multiline: true
+
+update_period:
+  name: Update a period
+  description: Correct an existing period while keeping its identifier and rebuild historical statistics.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      required: true
+      selector:
+        text:
+    period_id:
+      name: Period ID
+      required: true
+      selector:
+        text:
+    consumption_type:
+      name: Type
+      required: true
+      selector:
+        select:
+          options:
+            - label: Total water
+              value: water
+            - label: Hot water
+              value: hot_water
+            - label: Heating
+              value: heating
+            - label: Electricity
+              value: electricity
+    start_date:
+      name: Start
+      required: true
+      selector:
+        date:
+    end_date:
+      name: End
+      required: true
+      selector:
+        date:
+    value:
+      name: Consumption
+      required: true
+      selector:
+        number:
+          min: 0.001
+          max: 1000000000
+          step: any
+          mode: box
+    cost:
+      name: Total cost
       required: false
       selector:
         number:
@@ -59,26 +121,26 @@ add_period:
           multiline: true
 
 delete_period:
-  name: Supprimer une période
-  description: Supprime une période par son identifiant et reconstruit les statistiques.
+  name: Delete a period
+  description: Delete a period by identifier and rebuild historical statistics.
   fields:
     config_entry_id:
-      name: Identifiant de l'entrée
+      name: Config entry ID
       required: true
       selector:
         text:
     period_id:
-      name: Identifiant de la période
+      name: Period ID
       required: true
       selector:
         text:
 
 rebuild_statistics:
-  name: Reconstruire les statistiques
-  description: Reconstruit les statistiques historiques à partir des périodes stockées.
+  name: Rebuild statistics
+  description: Rebuild historical external statistics from the stored billing periods.
   fields:
     config_entry_id:
-      name: Identifiant de l'entrée
+      name: Config entry ID
       required: true
       selector:
         text:

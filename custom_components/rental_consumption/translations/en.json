@@ -10,20 +10,11 @@
           "heating_unit": "Heating unit",
           "grid_operator": "Grid operator / electricity supplier",
           "currency": "Currency"
-        },
-        "data_description": {
-          "heating_unit": "Unit shown on the bill.",
-          "grid_operator": "Manually entered name.",
-          "currency": "For example CHF."
         }
       }
     },
-    "abort": {
-      "already_configured": "A tracking entry with this name already exists."
-    },
-    "error": {
-      "invalid_name": "The apartment name cannot be empty."
-    }
+    "abort": {"already_configured": "A tracking entry with this name already exists."},
+    "error": {"invalid_name": "The apartment name cannot be empty."}
   },
   "options": {
     "step": {
@@ -34,78 +25,21 @@
           "add_hot_water": "Add hot water period",
           "add_heating": "Add heating period",
           "add_electricity": "Add electricity period",
-          "settings": "Configure grid operator and heating",
+          "edit_period": "Edit a period",
+          "settings": "Configure billing and heating",
           "delete_period": "Delete a period",
           "rebuild_statistics": "Rebuild statistics"
         }
       },
-      "add_water": {
-        "title": "Add total water consumption",
-        "description": "The value is distributed uniformly.",
-        "data": {
-          "start_date": "Start date",
-          "end_date": "End date included",
-          "value": "Total consumption (m³)",
-          "note": "Optional note"
-        }
-      },
-      "add_hot_water": {
-        "title": "Add hot water consumption",
-        "description": "Hot water remains separate from total water.",
-        "data": {
-          "start_date": "Start date",
-          "end_date": "End date included",
-          "value": "Hot water (m³)",
-          "note": "Optional note"
-        }
-      },
-      "add_heating": {
-        "title": "Add heating consumption",
-        "description": "Distribution uses the configured mode.",
-        "data": {
-          "start_date": "Start date",
-          "end_date": "End date included",
-          "value": "Total consumption",
-          "note": "Optional note"
-        }
-      },
-      "add_electricity": {
-        "title": "Add electricity consumption",
-        "description": "Total cost is optional.",
-        "data": {
-          "start_date": "Start date",
-          "end_date": "End date included",
-          "value": "Consumption (kWh)",
-          "cost": "Total period cost",
-          "note": "Optional note"
-        }
-      },
-      "settings": {
-        "title": "Billing settings",
-        "description": "The outdoor sensor must have long-term Recorder statistics.",
-        "data": {
-          "grid_operator": "Grid operator / supplier",
-          "currency": "Currency",
-          "heating_distribution": "Heating distribution",
-          "outdoor_temperature_sensor": "Outdoor sensor entity",
-          "heating_base_temperature": "Base temperature"
-        },
-        "data_description": {
-          "outdoor_temperature_sensor": "For example sensor.outdoor_temperature.",
-          "heating_base_temperature": "Heating-degree-day base, usually 20 °C."
-        }
-      },
-      "delete_period": {
-        "title": "Delete a period",
-        "description": "Deletion rebuilds the history.",
-        "data": {
-          "period_id": "Period"
-        }
-      },
-      "rebuild_statistics": {
-        "title": "Rebuild statistics",
-        "description": "Replace statistics with data calculated from stored periods."
-      }
+      "add_water": {"title": "Add total water consumption", "data": {"start_date": "Start date", "end_date": "End date included", "value": "Total consumption", "cost": "Total cost", "note": "Optional note"}},
+      "add_hot_water": {"title": "Add hot water consumption", "data": {"start_date": "Start date", "end_date": "End date included", "value": "Total consumption", "cost": "Total cost", "note": "Optional note"}},
+      "add_heating": {"title": "Add heating consumption", "data": {"start_date": "Start date", "end_date": "End date included", "value": "Total consumption", "cost": "Total cost", "note": "Optional note"}},
+      "add_electricity": {"title": "Add electricity consumption", "data": {"start_date": "Start date", "end_date": "End date included", "value": "Total consumption", "cost": "Total cost", "note": "Optional note"}},
+      "edit_period": {"title": "Select a period to edit", "data": {"period_id": "Period"}},
+      "edit_period_details": {"title": "Edit period", "description": "Saving the correction rebuilds historical statistics.", "data": {"start_date": "Start date", "end_date": "End date included", "value": "Total consumption", "cost": "Total cost", "note": "Optional note"}},
+      "settings": {"title": "Billing settings", "data": {"grid_operator": "Grid operator / supplier", "currency": "Currency", "heating_distribution": "Heating distribution", "outdoor_temperature_sensor": "Outdoor sensor entity", "heating_base_temperature": "Base temperature"}},
+      "delete_period": {"title": "Delete a period", "data": {"period_id": "Period"}},
+      "rebuild_statistics": {"title": "Rebuild statistics", "description": "Replace statistics with data calculated from stored periods."}
     },
     "error": {
       "end_before_start": "The end date must be on or after the start date.",
@@ -119,46 +53,27 @@
       "invalid_base_temperature": "Base temperature must be between 5 and 30 °C.",
       "temperature_sensor_required": "Select an outdoor temperature sensor."
     },
-    "abort": {
-      "not_loaded": "The entry is not loaded.",
-      "no_periods": "No period is stored."
-    }
+    "abort": {"not_loaded": "The entry is not loaded.", "no_periods": "No period is stored."}
   },
   "entity": {
     "sensor": {
-      "water_imported_total": {
-        "name": "Total water – imported total"
-      },
-      "hot_water_imported_total": {
-        "name": "Hot water – imported total"
-      },
-      "heating_imported_total": {
-        "name": "Heating – imported total"
-      },
-      "electricity_imported_total": {
-        "name": "Electricity – imported total"
-      },
-      "water_last_period": {
-        "name": "Total water – latest period"
-      },
-      "hot_water_last_period": {
-        "name": "Hot water – latest period"
-      },
-      "heating_last_period": {
-        "name": "Heating – latest period"
-      },
-      "electricity_last_period": {
-        "name": "Electricity – latest period"
-      },
-      "electricity_cost_total": {
-        "name": "Electricity – total cost"
-      },
-      "electricity_average_price": {
-        "name": "Electricity – average price"
-      },
-      "period_count": {
-        "name": "Stored periods"
-      }
+      "water_imported_total": {"name": "Total water – imported total"},
+      "hot_water_imported_total": {"name": "Hot water – imported total"},
+      "heating_imported_total": {"name": "Heating – imported total"},
+      "electricity_imported_total": {"name": "Electricity – imported total"},
+      "water_last_period": {"name": "Total water – latest period"},
+      "hot_water_last_period": {"name": "Hot water – latest period"},
+      "heating_last_period": {"name": "Heating – latest period"},
+      "electricity_last_period": {"name": "Electricity – latest period"},
+      "water_cost_total": {"name": "Total water – total cost"},
+      "hot_water_cost_total": {"name": "Hot water – total cost"},
+      "heating_cost_total": {"name": "Heating – total cost"},
+      "electricity_cost_total": {"name": "Electricity – total cost"},
+      "water_average_price": {"name": "Total water – average price"},
+      "hot_water_average_price": {"name": "Hot water – average price"},
+      "heating_average_price": {"name": "Heating – average price"},
+      "electricity_average_price": {"name": "Electricity – average price"},
+      "period_count": {"name": "Stored periods"}
     }
   }
 }

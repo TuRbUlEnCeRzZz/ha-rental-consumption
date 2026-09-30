@@ -29,6 +29,7 @@ from .const import (
     SERVICE_ADD_PERIOD,
     SERVICE_DELETE_PERIOD,
     SERVICE_REBUILD_STATISTICS,
+    SERVICE_UPDATE_PERIOD,
 )
 from .frontend import async_register_frontend, async_unregister_frontend
 from .manager import RentalConsumptionManager
@@ -39,22 +40,24 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-ADD_PERIOD_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_ENTRY_ID): cv.string,
-        vol.Required(CONF_CONSUMPTION_TYPE): vol.In(CONSUMPTION_TYPES),
-        vol.Required(CONF_START_DATE): cv.date,
-        vol.Required(CONF_END_DATE): cv.date,
-        vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
-        vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
-        vol.Optional(CONF_NOTE, default=""): cv.string,
-    }
-)
-DELETE_PERIOD_SCHEMA = vol.Schema(
+_PERIOD_FIELDS = {
+    vol.Required(CONF_CONSUMPTION_TYPE): vol.In(CONSUMPTION_TYPES),
+    vol.Required(CONF_START_DATE): cv.date,
+    vol.Required(CONF_END_DATE): cv.date,
+    vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
+    vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_NOTE, default=""): cv.string,
+}
+ADD_PERIOD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string, **_PERIOD_FIELDS})
+UPDATE_PERIOD_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
         vol.Required(CONF_PERIOD_ID): cv.string,
+        **_PERIOD_FIELDS,
     }
+)
+DELETE_PERIOD_SCHEMA = vol.Schema(
+    {vol.Required(CONF_ENTRY_ID): cv.string, vol.Required(CONF_PERIOD_ID): cv.string}
 )
 REBUILD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string})
 
@@ -87,6 +90,21 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         except PeriodValidationError as err:
             raise HomeAssistantError(err.code) from err
 
+    async def handle_update_period(call: ServiceCall) -> None:
+        manager = get_manager(call)
+        try:
+            await manager.async_update_period(
+                str(call.data[CONF_PERIOD_ID]),
+                call.data[CONF_CONSUMPTION_TYPE],
+                _as_date(call.data[CONF_START_DATE]),
+                _as_date(call.data[CONF_END_DATE]),
+                float(call.data[CONF_VALUE]),
+                str(call.data.get(CONF_NOTE, "")),
+                None if CONF_COST not in call.data else float(call.data[CONF_COST]),
+            )
+        except PeriodValidationError as err:
+            raise HomeAssistantError(err.code) from err
+
     async def handle_delete_period(call: ServiceCall) -> None:
         manager = get_manager(call)
         try:
@@ -99,22 +117,16 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
     if not hass.services.has_service(DOMAIN, SERVICE_ADD_PERIOD):
         hass.services.async_register(
-            DOMAIN,
-            SERVICE_ADD_PERIOD,
-            handle_add_period,
-            schema=ADD_PERIOD_SCHEMA,
+            DOMAIN, SERVICE_ADD_PERIOD, handle_add_period, schema=ADD_PERIOD_SCHEMA
         )
         hass.services.async_register(
-            DOMAIN,
-            SERVICE_DELETE_PERIOD,
-            handle_delete_period,
-            schema=DELETE_PERIOD_SCHEMA,
+            DOMAIN, SERVICE_UPDATE_PERIOD, handle_update_period, schema=UPDATE_PERIOD_SCHEMA
         )
         hass.services.async_register(
-            DOMAIN,
-            SERVICE_REBUILD_STATISTICS,
-            handle_rebuild,
-            schema=REBUILD_SCHEMA,
+            DOMAIN, SERVICE_DELETE_PERIOD, handle_delete_period, schema=DELETE_PERIOD_SCHEMA
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_REBUILD_STATISTICS, handle_rebuild, schema=REBUILD_SCHEMA
         )
     return True
 
@@ -131,7 +143,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     @callback
     def _schedule_statistics_rebuild(started_hass: HomeAssistant) -> None:
-        """Rebuild statistics only after Home Assistant has fully started."""
         entry.async_create_background_task(
             started_hass,
             _async_rebuild_statistics_after_start(manager),
@@ -142,9 +153,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_rebuild_statistics_after_start(
-    manager: RentalConsumptionManager,
-) -> None:
+async def _async_rebuild_statistics_after_start(manager: RentalConsumptionManager) -> None:
     """Rebuild external statistics without delaying Home Assistant startup."""
     try:
         await manager.async_rebuild_statistics()

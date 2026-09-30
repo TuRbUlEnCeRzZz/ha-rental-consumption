@@ -37,6 +37,7 @@ from .const import (
     CONF_HEATING_DISTRIBUTION,
     CONF_HEATING_UNIT,
     CONF_OUTDOOR_TEMPERATURE_SENSOR,
+    CONSUMPTION_TYPES,
     DEFAULT_CURRENCY,
     DEFAULT_HEATING_BASE_TEMPERATURE,
     DISTRIBUTION_OUTDOOR_TEMPERATURE,
@@ -64,6 +65,13 @@ from .models import (
 _LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[[], None]
+
+_LABELS = {
+    TYPE_WATER: "Eau totale",
+    TYPE_HOT_WATER: "Eau chaude",
+    TYPE_HEATING: "Chauffage",
+    TYPE_ELECTRICITY: "Électricité",
+}
 
 
 class RentalConsumptionManager:
@@ -131,23 +139,54 @@ class RentalConsumptionManager:
     ) -> ConsumptionPeriod:
         """Validate, persist and import a new period."""
         candidate = ConsumptionPeriod.create(
-            consumption_type,
-            start_date,
-            end_date,
-            value,
-            note,
-            cost,
+            consumption_type, start_date, end_date, value, note, cost
         )
         async with self._lock:
             validate_period(candidate, self._periods, dt_util.now().date())
             self._periods.append(candidate)
             await self._async_save()
-            try:
-                await self._async_rebuild_statistics_unlocked()
-            except (HomeAssistantError, RuntimeError) as err:
-                _LOGGER.warning(
-                    "The period was saved, but statistics could not be rebuilt: %s", err
-                )
+            await self._try_rebuild_unlocked("saved")
+        self._notify_listeners()
+        return candidate
+
+    async def async_update_period(
+        self,
+        period_id: str,
+        consumption_type: ConsumptionType,
+        start_date: date,
+        end_date: date,
+        value: float,
+        note: str = "",
+        cost: float | None = None,
+    ) -> ConsumptionPeriod:
+        """Correct a stored period while keeping its stable identifier."""
+        async with self._lock:
+            original = next(
+                (period for period in self._periods if period.period_id == period_id),
+                None,
+            )
+            if original is None:
+                raise PeriodValidationError("period_not_found")
+            candidate = original.updated(
+                consumption_type=consumption_type,
+                start_date=start_date,
+                end_date=end_date,
+                value=value,
+                note=note,
+                cost=cost,
+            )
+            validate_period(
+                candidate,
+                self._periods,
+                dt_util.now().date(),
+                ignore_period_id=period_id,
+            )
+            self._periods = [
+                candidate if period.period_id == period_id else period
+                for period in self._periods
+            ]
+            await self._async_save()
+            await self._try_rebuild_unlocked("updated")
         self._notify_listeners()
         return candidate
 
@@ -159,14 +198,19 @@ class RentalConsumptionManager:
                 raise PeriodValidationError("period_not_found")
             self._periods = new_periods
             await self._async_save()
-            try:
-                await self._async_rebuild_statistics_unlocked()
-            except (HomeAssistantError, RuntimeError) as err:
-                _LOGGER.warning(
-                    "The period was deleted, but statistics could not be rebuilt: %s",
-                    err,
-                )
+            await self._try_rebuild_unlocked("deleted")
         self._notify_listeners()
+
+    async def _try_rebuild_unlocked(self, action: str) -> None:
+        """Rebuild after a data mutation without losing the stored correction."""
+        try:
+            await self._async_rebuild_statistics_unlocked()
+        except (HomeAssistantError, RuntimeError) as err:
+            _LOGGER.warning(
+                "The period was %s, but statistics could not be rebuilt: %s",
+                action,
+                err,
+            )
 
     async def async_update_settings(
         self,
@@ -227,9 +271,7 @@ class RentalConsumptionManager:
     @property
     def heating_distribution(self) -> str:
         """Return the configured heating distribution mode."""
-        return str(
-            self.setting(CONF_HEATING_DISTRIBUTION, DISTRIBUTION_UNIFORM_DAILY)
-        )
+        return str(self.setting(CONF_HEATING_DISTRIBUTION, DISTRIBUTION_UNIFORM_DAILY))
 
     @property
     def outdoor_temperature_sensor(self) -> str:
@@ -254,7 +296,7 @@ class RentalConsumptionManager:
             if period.consumption_type == consumption_type
         )
 
-    def total_cost(self, consumption_type: ConsumptionType = TYPE_ELECTRICITY) -> float:
+    def total_cost(self, consumption_type: ConsumptionType) -> float:
         """Return the sum of known costs for one metric."""
         return sum(
             period.cost or 0.0
@@ -262,9 +304,7 @@ class RentalConsumptionManager:
             if period.consumption_type == consumption_type
         )
 
-    def average_unit_price(
-        self, consumption_type: ConsumptionType = TYPE_ELECTRICITY
-    ) -> float | None:
+    def average_unit_price(self, consumption_type: ConsumptionType) -> float | None:
         """Return the consumption-weighted average price."""
         priced = [
             period
@@ -297,18 +337,14 @@ class RentalConsumptionManager:
         """Return the external statistic identifier."""
         return f"{DOMAIN}:{self.entry.entry_id}_{consumption_type}"
 
-    def cost_statistic_id(self) -> str:
-        """Return the electricity cost statistic identifier."""
-        return f"{DOMAIN}:{self.entry.entry_id}_{TYPE_ELECTRICITY}_cost"
+    def cost_statistic_id(self, consumption_type: ConsumptionType) -> str:
+        """Return the external cost statistic identifier."""
+        return f"{DOMAIN}:{self.entry.entry_id}_{consumption_type}_cost"
 
     def all_statistic_ids(self) -> list[str]:
         """Return all statistics owned by this config entry."""
-        return [
-            self.statistic_id(TYPE_WATER),
-            self.statistic_id(TYPE_HOT_WATER),
-            self.statistic_id(TYPE_HEATING),
-            self.statistic_id(TYPE_ELECTRICITY),
-            self.cost_statistic_id(),
+        return [self.statistic_id(metric) for metric in CONSUMPTION_TYPES] + [
+            self.cost_statistic_id(metric) for metric in CONSUMPTION_TYPES
         ]
 
     def unit(self, consumption_type: ConsumptionType) -> str:
@@ -332,12 +368,6 @@ class RentalConsumptionManager:
 
     def metadata(self, consumption_type: ConsumptionType) -> StatisticMetaData:
         """Build metadata for one external consumption statistic."""
-        labels = {
-            TYPE_WATER: "Eau totale",
-            TYPE_HOT_WATER: "Eau chaude",
-            TYPE_HEATING: "Chauffage",
-            TYPE_ELECTRICITY: "Électricité",
-        }
         distribution = (
             self.heating_distribution
             if consumption_type == TYPE_HEATING
@@ -346,21 +376,21 @@ class RentalConsumptionManager:
         return StatisticMetaData(
             has_sum=True,
             mean_type=StatisticMeanType.NONE,
-            name=f"{self.entry.title} – {labels[consumption_type]} ({distribution})",
+            name=f"{self.entry.title} – {_LABELS[consumption_type]} ({distribution})",
             source=DOMAIN,
             statistic_id=self.statistic_id(consumption_type),
             unit_class=self.unit_class(consumption_type),
             unit_of_measurement=self.unit(consumption_type),
         )
 
-    def cost_metadata(self) -> StatisticMetaData:
-        """Build metadata for the electricity cost statistic."""
+    def cost_metadata(self, consumption_type: ConsumptionType) -> StatisticMetaData:
+        """Build metadata for one external cost statistic."""
         return StatisticMetaData(
             has_sum=True,
             mean_type=StatisticMeanType.NONE,
-            name=f"{self.entry.title} – Coût de l'électricité",
+            name=f"{self.entry.title} – Coût {_LABELS[consumption_type].lower()}",
             source=DOMAIN,
-            statistic_id=self.cost_statistic_id(),
+            statistic_id=self.cost_statistic_id(consumption_type),
             unit_class=None,
             unit_of_measurement=self.currency,
         )
@@ -386,51 +416,45 @@ class RentalConsumptionManager:
         recorder.async_clear_statistics(self.all_statistic_ids())
         await recorder.async_block_till_done()
 
-        for consumption_type in (
-            TYPE_WATER,
-            TYPE_HOT_WATER,
-            TYPE_HEATING,
-            TYPE_ELECTRICITY,
-        ):
+        for consumption_type in CONSUMPTION_TYPES:
             weights = heating_weights if consumption_type == TYPE_HEATING else None
             points = build_daily_points(
                 self._periods,
                 consumption_type,
                 weights_by_period=weights,
             )
-            if not points:
-                continue
-            statistics = [
-                StatisticData(
-                    start=datetime.combine(day, time(hour=12), tzinfo=timezone.utc),
-                    state=daily_value,
-                    sum=cumulative_sum,
+            if points:
+                async_add_external_statistics(
+                    self.hass,
+                    self.metadata(consumption_type),
+                    [
+                        StatisticData(
+                            start=datetime.combine(day, time(hour=12), tzinfo=timezone.utc),
+                            state=daily_value,
+                            sum=cumulative_sum,
+                        )
+                        for day, daily_value, cumulative_sum in points
+                    ],
                 )
-                for day, daily_value, cumulative_sum in points
-            ]
-            async_add_external_statistics(
-                self.hass,
-                self.metadata(consumption_type),
-                statistics,
-            )
 
-        cost_points = build_daily_cost_points(
-            self._periods,
-            TYPE_ELECTRICITY,
-        )
-        if cost_points:
-            async_add_external_statistics(
-                self.hass,
-                self.cost_metadata(),
-                [
-                    StatisticData(
-                        start=datetime.combine(day, time(hour=12), tzinfo=timezone.utc),
-                        state=daily_cost,
-                        sum=cumulative_cost,
-                    )
-                    for day, daily_cost, cumulative_cost in cost_points
-                ],
+            cost_points = build_daily_cost_points(
+                self._periods,
+                consumption_type,
+                weights_by_period=weights,
             )
+            if cost_points:
+                async_add_external_statistics(
+                    self.hass,
+                    self.cost_metadata(consumption_type),
+                    [
+                        StatisticData(
+                            start=datetime.combine(day, time(hour=12), tzinfo=timezone.utc),
+                            state=daily_cost,
+                            sum=cumulative_cost,
+                        )
+                        for day, daily_cost, cumulative_cost in cost_points
+                    ],
+                )
 
         await recorder.async_block_till_done()
         _LOGGER.debug(
@@ -500,12 +524,7 @@ class RentalConsumptionManager:
                 if positive_weights
                 else 1.0
             )
-            weights = {
-                day: degree_day_weights.get(day, fallback_weight)
-                for day in days
-            }
-            # If all known days are warmer than the base temperature, degree-day
-            # weighting has no meaningful signal and the entire period stays uniform.
+            weights = {day: degree_day_weights.get(day, fallback_weight) for day in days}
             use_temperature = bool(known) and bool(positive_weights)
             if use_temperature:
                 weights_by_period[period.period_id] = weights
@@ -516,9 +535,6 @@ class RentalConsumptionManager:
 
             coverage = len(known) / len(days) if days else 0
             mean_temperature = sum(known.values()) / len(known) if known else None
-            # Correlate real billed daily averages between periods, not the synthetic
-            # daily allocation generated from the same temperatures. Requiring at
-            # least 50% temperature coverage avoids using a scarcely observed period.
             if mean_temperature is not None and coverage >= 0.5:
                 correlation_temperatures.append(mean_temperature)
                 correlation_daily_consumptions.append(period.daily_average)
