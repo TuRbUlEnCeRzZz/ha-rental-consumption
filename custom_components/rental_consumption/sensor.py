@@ -30,7 +30,6 @@ from .const import (
     ATTR_TEMPERATURE_CORRELATION,
     ATTR_TEMPERATURE_COVERAGE,
     CONF_HEATING_UNIT,
-    CONSUMPTION_TYPES,
     DISTRIBUTION_UNIFORM_DAILY,
     DOMAIN,
     HEATING_UNIT_ALLOCATION,
@@ -49,20 +48,18 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Rental Consumption sensors."""
     manager: RentalConsumptionManager = hass.data[DOMAIN][entry.entry_id]
+    metric_types = (TYPE_WATER, TYPE_HOT_WATER, TYPE_HEATING, TYPE_ELECTRICITY)
     async_add_entities(
-        [RentalTotalSensor(manager, metric) for metric in CONSUMPTION_TYPES]
-        + [RentalLatestPeriodSensor(manager, metric) for metric in CONSUMPTION_TYPES]
-        + [RentalCostSensor(manager, metric) for metric in CONSUMPTION_TYPES]
-        + [RentalAveragePriceSensor(manager, metric) for metric in CONSUMPTION_TYPES]
+        [RentalTotalSensor(manager, metric) for metric in metric_types]
+        + [RentalLatestPeriodSensor(manager, metric) for metric in metric_types]
+        + [RentalCostSensor(manager, metric) for metric in metric_types]
+        + [RentalAveragePriceSensor(manager, metric) for metric in metric_types]
         + [RentalPeriodCountSensor(manager)]
     )
 
 
 class RentalConsumptionBaseSensor(SensorEntity):
-    """Base entity backed by the consumption manager."""
-
     _attr_has_entity_name = True
     _attr_should_poll = False
 
@@ -77,21 +74,17 @@ class RentalConsumptionBaseSensor(SensorEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to manager updates."""
         self.async_on_remove(self.manager.async_add_listener(self._handle_update))
 
     @callback
     def _handle_update(self) -> None:
-        """Write a changed sensor state."""
         self.async_write_ha_state()
 
 
 class RentalTotalSensor(RentalConsumptionBaseSensor):
-    """Current summary of all imported historical consumption."""
+    """Current summary total. Historical truth lives in external Recorder statistics."""
 
-    def __init__(
-        self, manager: RentalConsumptionManager, consumption_type: ConsumptionType
-    ) -> None:
+    def __init__(self, manager: RentalConsumptionManager, consumption_type: ConsumptionType) -> None:
         super().__init__(manager)
         self.consumption_type = consumption_type
         self._attr_unique_id = f"{manager.entry.entry_id}_{consumption_type}_imported_total"
@@ -107,18 +100,17 @@ class RentalTotalSensor(RentalConsumptionBaseSensor):
 
     @property
     def native_value(self) -> float:
-        """Return total imported consumption."""
         return round(self.manager.total(self.consumption_type), 6)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return useful period, cost and distribution metadata."""
         latest = self.manager.latest(self.consumption_type)
-        distribution = (
-            self.manager.heating_distribution
-            if self.consumption_type == TYPE_HEATING
-            else DISTRIBUTION_UNIFORM_DAILY
-        )
+        if self.consumption_type == TYPE_HEATING:
+            distribution = self.manager.heating_analysis["effective_distribution"]
+        elif self.consumption_type == TYPE_ELECTRICITY:
+            distribution = self.manager.electricity_analysis["effective_distribution"]
+        else:
+            distribution = DISTRIBUTION_UNIFORM_DAILY
         attrs: dict[str, Any] = {
             ATTR_PERIODS_COUNT: self.manager.count(self.consumption_type),
             ATTR_STATISTIC_ID: self.manager.statistic_id(self.consumption_type),
@@ -129,45 +121,39 @@ class RentalTotalSensor(RentalConsumptionBaseSensor):
             "currency": self.manager.currency,
         }
         if self.consumption_type == TYPE_ELECTRICITY:
-            attrs[ATTR_GRID_OPERATOR] = self.manager.grid_operator or None
+            attrs.update({
+                ATTR_GRID_OPERATOR: self.manager.grid_operator or None,
+                "load_curve": self.manager.electricity_analysis,
+                "export": self.manager.export_public_settings(),
+            })
         if self.consumption_type == TYPE_HEATING:
             analysis = self.manager.heating_analysis
-            attrs.update(
-                {
-                    ATTR_DISTRIBUTION: analysis["effective_distribution"],
-                    ATTR_OUTDOOR_TEMPERATURE_SENSOR: analysis["outdoor_temperature_sensor"] or None,
-                    ATTR_HEATING_BASE_TEMPERATURE: analysis["heating_base_temperature"],
-                    ATTR_TEMPERATURE_COVERAGE: round(analysis["temperature_coverage"] * 100, 2),
-                    ATTR_MEAN_OUTDOOR_TEMPERATURE: analysis["mean_outdoor_temperature"],
-                    ATTR_TEMPERATURE_CORRELATION: analysis["temperature_correlation"],
-                    "correlation_periods": analysis["correlation_periods"],
-                    "weighted_periods": analysis["weighted_periods"],
-                    "fallback_periods": analysis["fallback_periods"],
-                    "fallback_reason": analysis["fallback_reason"],
-                }
-            )
+            attrs.update({
+                ATTR_OUTDOOR_TEMPERATURE_SENSOR: analysis["outdoor_temperature_sensor"] or None,
+                ATTR_HEATING_BASE_TEMPERATURE: analysis["heating_base_temperature"],
+                ATTR_TEMPERATURE_COVERAGE: round(analysis["temperature_coverage"] * 100, 2),
+                ATTR_MEAN_OUTDOOR_TEMPERATURE: analysis["mean_outdoor_temperature"],
+                ATTR_TEMPERATURE_CORRELATION: analysis["temperature_correlation"],
+            })
         if latest is not None:
-            attrs.update(
-                {
-                    ATTR_LAST_PERIOD_START: latest.start_date.isoformat(),
-                    ATTR_LAST_PERIOD_END: latest.end_date.isoformat(),
-                    ATTR_LAST_PERIOD_DAYS: latest.days,
-                    ATTR_LAST_PERIOD_VALUE: latest.value,
-                    ATTR_LAST_PERIOD_DAILY_AVERAGE: round(latest.daily_average, 6),
-                    ATTR_LAST_PERIOD_COST: latest.cost,
-                    ATTR_LAST_PERIOD_UNIT_PRICE: latest.unit_price,
-                    ATTR_LAST_PERIOD_NOTE: latest.note or None,
-                }
-            )
+            attrs.update({
+                ATTR_LAST_PERIOD_START: latest.start_date.isoformat(),
+                ATTR_LAST_PERIOD_END: latest.end_date.isoformat(),
+                ATTR_LAST_PERIOD_DAYS: latest.days,
+                ATTR_LAST_PERIOD_VALUE: latest.value,
+                ATTR_LAST_PERIOD_DAILY_AVERAGE: round(latest.daily_average, 6),
+                ATTR_LAST_PERIOD_COST: latest.cost,
+                ATTR_LAST_PERIOD_UNIT_PRICE: latest.unit_price,
+                ATTR_LAST_PERIOD_NOTE: latest.note or None,
+                "tariff_mode": latest.tariff_mode,
+                "peak_value": latest.peak_value,
+                "offpeak_value": latest.offpeak_value,
+            })
         return attrs
 
 
 class RentalLatestPeriodSensor(RentalConsumptionBaseSensor):
-    """Value of the most recently ending period."""
-
-    def __init__(
-        self, manager: RentalConsumptionManager, consumption_type: ConsumptionType
-    ) -> None:
+    def __init__(self, manager: RentalConsumptionManager, consumption_type: ConsumptionType) -> None:
         super().__init__(manager)
         self.consumption_type = consumption_type
         self._attr_unique_id = f"{manager.entry.entry_id}_{consumption_type}_last_period"
@@ -177,17 +163,15 @@ class RentalLatestPeriodSensor(RentalConsumptionBaseSensor):
 
     @property
     def native_value(self) -> float | None:
-        """Return latest period value."""
         latest = self.manager.latest(self.consumption_type)
         return None if latest is None else latest.value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return latest period details."""
         latest = self.manager.latest(self.consumption_type)
         if latest is None:
             return None
-        attrs: dict[str, Any] = {
+        attrs = {
             ATTR_LAST_PERIOD_START: latest.start_date.isoformat(),
             ATTR_LAST_PERIOD_END: latest.end_date.isoformat(),
             ATTR_LAST_PERIOD_DAYS: latest.days,
@@ -195,21 +179,24 @@ class RentalLatestPeriodSensor(RentalConsumptionBaseSensor):
             ATTR_LAST_PERIOD_COST: latest.cost,
             ATTR_LAST_PERIOD_UNIT_PRICE: latest.unit_price,
             ATTR_LAST_PERIOD_NOTE: latest.note or None,
+            "tariff_mode": latest.tariff_mode,
+            "peak_value": latest.peak_value,
+            "offpeak_value": latest.offpeak_value,
+            "peak_cost": latest.peak_cost,
+            "offpeak_cost": latest.offpeak_cost,
         }
         if self.consumption_type == TYPE_HEATING:
             attrs.update(self.manager.heating_period_analysis.get(latest.period_id, {}))
+        if self.consumption_type == TYPE_ELECTRICITY:
+            attrs.update(self.manager.electricity_period_analysis.get(latest.period_id, {}))
         return attrs
 
 
 class RentalCostSensor(RentalConsumptionBaseSensor):
-    """Current summary of known historical cost for one metric."""
-
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_suggested_display_precision = 2
 
-    def __init__(
-        self, manager: RentalConsumptionManager, consumption_type: ConsumptionType
-    ) -> None:
+    def __init__(self, manager: RentalConsumptionManager, consumption_type: ConsumptionType) -> None:
         super().__init__(manager)
         self.consumption_type = consumption_type
         self._attr_unique_id = f"{manager.entry.entry_id}_{consumption_type}_cost_total"
@@ -225,7 +212,7 @@ class RentalCostSensor(RentalConsumptionBaseSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {
+        return {
             ATTR_COST_STATISTIC_ID: self.manager.cost_statistic_id(self.consumption_type),
             "priced_periods": sum(
                 period.cost is not None
@@ -233,20 +220,13 @@ class RentalCostSensor(RentalConsumptionBaseSensor):
                 if period.consumption_type == self.consumption_type
             ),
         }
-        if self.consumption_type == TYPE_ELECTRICITY:
-            attrs[ATTR_GRID_OPERATOR] = self.manager.grid_operator or None
-        return attrs
 
 
 class RentalAveragePriceSensor(RentalConsumptionBaseSensor):
-    """Weighted average unit price for one metric."""
-
     _attr_icon = "mdi:cash-multiple"
     _attr_suggested_display_precision = 4
 
-    def __init__(
-        self, manager: RentalConsumptionManager, consumption_type: ConsumptionType
-    ) -> None:
+    def __init__(self, manager: RentalConsumptionManager, consumption_type: ConsumptionType) -> None:
         super().__init__(manager)
         self.consumption_type = consumption_type
         self._attr_unique_id = f"{manager.entry.entry_id}_{consumption_type}_average_price"
@@ -261,16 +241,8 @@ class RentalAveragePriceSensor(RentalConsumptionBaseSensor):
         value = self.manager.average_unit_price(self.consumption_type)
         return None if value is None else round(value, 8)
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        if self.consumption_type == TYPE_ELECTRICITY:
-            return {ATTR_GRID_OPERATOR: self.manager.grid_operator or None}
-        return {}
-
 
 class RentalPeriodCountSensor(RentalConsumptionBaseSensor):
-    """Number of stored billing periods."""
-
     _attr_icon = "mdi:calendar-multiple"
 
     def __init__(self, manager: RentalConsumptionManager) -> None:

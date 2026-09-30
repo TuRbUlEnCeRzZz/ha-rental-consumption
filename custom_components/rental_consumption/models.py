@@ -9,7 +9,13 @@ from math import sqrt
 from typing import Any, Mapping
 from uuid import uuid4
 
-from .const import ConsumptionType
+from .const import (
+    TARIFF_MODES,
+    TARIFF_PEAK_OFFPEAK,
+    TARIFF_SINGLE,
+    TYPE_ELECTRICITY,
+    ConsumptionType,
+)
 
 
 class PeriodValidationError(ValueError):
@@ -31,23 +37,37 @@ class ConsumptionPeriod:
     value: float
     cost: float | None = None
     note: str = ""
+    tariff_mode: str = TARIFF_SINGLE
+    peak_value: float | None = None
+    offpeak_value: float | None = None
+    peak_cost: float | None = None
+    offpeak_cost: float | None = None
 
     @property
     def days(self) -> int:
-        """Return the inclusive period length."""
         return (self.end_date - self.start_date).days + 1
 
     @property
     def daily_average(self) -> float:
-        """Return the uniformly distributed daily average."""
         return self.value / self.days
 
     @property
     def unit_price(self) -> float | None:
-        """Return the billed cost per consumption unit when known."""
         if self.cost is None or self.value <= 0:
             return None
         return self.cost / self.value
+
+    @property
+    def peak_unit_price(self) -> float | None:
+        if self.peak_cost is None or not self.peak_value:
+            return None
+        return self.peak_cost / self.peak_value
+
+    @property
+    def offpeak_unit_price(self) -> float | None:
+        if self.offpeak_cost is None or not self.offpeak_value:
+            return None
+        return self.offpeak_cost / self.offpeak_value
 
     @classmethod
     def create(
@@ -58,8 +78,13 @@ class ConsumptionPeriod:
         value: float,
         note: str = "",
         cost: float | None = None,
+        *,
+        tariff_mode: str = TARIFF_SINGLE,
+        peak_value: float | None = None,
+        offpeak_value: float | None = None,
+        peak_cost: float | None = None,
+        offpeak_cost: float | None = None,
     ) -> "ConsumptionPeriod":
-        """Create a period with a generated identifier."""
         return cls(
             period_id=uuid4().hex,
             consumption_type=consumption_type,
@@ -68,6 +93,11 @@ class ConsumptionPeriod:
             value=float(value),
             cost=None if cost is None else float(cost),
             note=note.strip(),
+            tariff_mode=tariff_mode,
+            peak_value=_float_or_none(peak_value),
+            offpeak_value=_float_or_none(offpeak_value),
+            peak_cost=_float_or_none(peak_cost),
+            offpeak_cost=_float_or_none(offpeak_cost),
         )
 
     def updated(
@@ -79,8 +109,12 @@ class ConsumptionPeriod:
         value: float,
         note: str = "",
         cost: float | None = None,
+        tariff_mode: str | None = None,
+        peak_value: float | None = None,
+        offpeak_value: float | None = None,
+        peak_cost: float | None = None,
+        offpeak_cost: float | None = None,
     ) -> "ConsumptionPeriod":
-        """Return a corrected copy while retaining the stable period id."""
         return replace(
             self,
             consumption_type=consumption_type,
@@ -89,11 +123,15 @@ class ConsumptionPeriod:
             value=float(value),
             cost=None if cost is None else float(cost),
             note=note.strip(),
+            tariff_mode=tariff_mode or self.tariff_mode,
+            peak_value=_float_or_none(peak_value),
+            offpeak_value=_float_or_none(offpeak_value),
+            peak_cost=_float_or_none(peak_cost),
+            offpeak_cost=_float_or_none(offpeak_cost),
         )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ConsumptionPeriod":
-        """Restore a period from storage, including older records."""
         raw_cost = data.get("cost")
         return cls(
             period_id=str(data["period_id"]),
@@ -103,14 +141,22 @@ class ConsumptionPeriod:
             value=float(data["value"]),
             cost=None if raw_cost in (None, "") else float(raw_cost),
             note=str(data.get("note", "")),
+            tariff_mode=str(data.get("tariff_mode", TARIFF_SINGLE)),
+            peak_value=_float_or_none(data.get("peak_value")),
+            offpeak_value=_float_or_none(data.get("offpeak_value")),
+            peak_cost=_float_or_none(data.get("peak_cost")),
+            offpeak_cost=_float_or_none(data.get("offpeak_cost")),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize a period for storage."""
         data = asdict(self)
         data["start_date"] = self.start_date.isoformat()
         data["end_date"] = self.end_date.isoformat()
         return data
+
+
+def _float_or_none(value: Any) -> float | None:
+    return None if value in (None, "") else float(value)
 
 
 def validate_period(
@@ -120,7 +166,6 @@ def validate_period(
     *,
     ignore_period_id: str | None = None,
 ) -> None:
-    """Validate dates, values and overlap for a new or edited period."""
     if candidate.end_date < candidate.start_date:
         raise PeriodValidationError("end_before_start")
     if candidate.end_date > today:
@@ -129,6 +174,29 @@ def validate_period(
         raise PeriodValidationError("invalid_value")
     if candidate.cost is not None and candidate.cost < 0:
         raise PeriodValidationError("invalid_cost")
+
+    if candidate.consumption_type == TYPE_ELECTRICITY:
+        if candidate.tariff_mode not in TARIFF_MODES:
+            raise PeriodValidationError("invalid_tariff_mode")
+        if candidate.tariff_mode == TARIFF_PEAK_OFFPEAK:
+            peak = candidate.peak_value or 0.0
+            offpeak = candidate.offpeak_value or 0.0
+            if peak < 0 or offpeak < 0 or (peak + offpeak) <= 0:
+                raise PeriodValidationError("invalid_tariff_values")
+            tolerance = max(0.001, candidate.value * 1e-6)
+            if abs((peak + offpeak) - candidate.value) > tolerance:
+                raise PeriodValidationError("tariff_total_mismatch")
+            for value in (candidate.peak_cost, candidate.offpeak_cost):
+                if value is not None and value < 0:
+                    raise PeriodValidationError("invalid_cost")
+            if (
+                candidate.cost is not None
+                and candidate.peak_cost is not None
+                and candidate.offpeak_cost is not None
+                and abs(candidate.peak_cost + candidate.offpeak_cost - candidate.cost)
+                > max(0.01, candidate.cost * 1e-6)
+            ):
+                raise PeriodValidationError("tariff_cost_mismatch")
 
     for existing in existing_periods:
         if ignore_period_id and existing.period_id == ignore_period_id:
@@ -144,7 +212,6 @@ def validate_period(
 
 
 def date_range(start_date: date, end_date: date) -> list[date]:
-    """Return all dates in an inclusive range."""
     return [
         start_date + timedelta(days=offset)
         for offset in range((end_date - start_date).days + 1)
@@ -157,7 +224,6 @@ def distribute_total(
     total_value: float,
     weights: Mapping[date, float] | None = None,
 ) -> list[tuple[date, float]]:
-    """Distribute an exact total over days using optional non-negative weights."""
     days = date_range(start_date, end_date)
     decimal_total = Decimal(str(total_value))
 
@@ -189,14 +255,12 @@ def build_daily_points(
     consumption_type: ConsumptionType,
     weights_by_period: Mapping[str, Mapping[date, float]] | None = None,
 ) -> list[tuple[date, float, float]]:
-    """Return day, allocated state and cumulative sum for one metric."""
     selected = sorted(
         (p for p in periods if p.consumption_type == consumption_type),
         key=lambda p: (p.start_date, p.end_date, p.period_id),
     )
     points: list[tuple[date, float, float]] = []
     cumulative = Decimal("0")
-
     for period in selected:
         weights = None if weights_by_period is None else weights_by_period.get(period.period_id)
         for day, amount in distribute_total(
@@ -204,7 +268,6 @@ def build_daily_points(
         ):
             cumulative += Decimal(str(amount))
             points.append((day, amount, float(cumulative)))
-
     return points
 
 
@@ -213,7 +276,6 @@ def build_daily_cost_points(
     consumption_type: ConsumptionType,
     weights_by_period: Mapping[str, Mapping[date, float]] | None = None,
 ) -> list[tuple[date, float, float]]:
-    """Return exact daily and cumulative cost points for periods with a cost."""
     selected = sorted(
         (
             p
@@ -224,7 +286,6 @@ def build_daily_cost_points(
     )
     points: list[tuple[date, float, float]] = []
     cumulative = Decimal("0")
-
     for period in selected:
         weights = None if weights_by_period is None else weights_by_period.get(period.period_id)
         for day, amount in distribute_total(
@@ -235,8 +296,25 @@ def build_daily_cost_points(
     return points
 
 
+def period_daily_points(
+    period: ConsumptionPeriod,
+    weights: Mapping[date, float] | None = None,
+) -> list[tuple[date, float]]:
+    """Return exact daily values for one period."""
+    return distribute_total(period.start_date, period.end_date, period.value, weights)
+
+
+def period_daily_cost_points(
+    period: ConsumptionPeriod,
+    weights: Mapping[date, float] | None = None,
+) -> list[tuple[date, float]]:
+    """Return exact daily cost values for one period."""
+    if period.cost is None:
+        return []
+    return distribute_total(period.start_date, period.end_date, period.cost, weights)
+
+
 def pearson_correlation(values_x: list[float], values_y: list[float]) -> float | None:
-    """Return Pearson's r, or None when the series cannot be correlated."""
     if len(values_x) != len(values_y) or len(values_x) < 2:
         return None
     mean_x = sum(values_x) / len(values_x)

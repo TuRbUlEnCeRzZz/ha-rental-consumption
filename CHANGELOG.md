@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0 — 2026-09-30
+
+- Added electricity distribution based on the measured incoming load curve.
+- Added automatic load-curve source priority: VictoriaMetrics → Recorder → uniform fallback.
+- Added configurable load-curve coverage threshold.
+- Added per-period electricity allocation diagnostics including source and coverage.
+- Added single-rate and peak/off-peak electricity billing modes.
+- Added peak/off-peak consumption and optional cost breakdown fields.
+- Added generic external time-series export architecture.
+- Added VictoriaMetrics historical export, replacement and full rebuild.
+- Added InfluxDB 1.x historical export and safe delete/rewrite support.
+- Added InfluxDB 2.x historical export and safe delete/rewrite support.
+- Added InfluxDB 3.x write support with explicit safe-delete limitations.
+- Added optional automatic external synchronization after data changes.
+- Added `rental_consumption.sync_export`.
+- Added external export connection testing.
+- Added secret redaction to diagnostics.
+- Reworked the sidebar history into one responsive component instead of duplicated desktop/mobile views.
+- Added history filters by type and year.
+- Reworked period cards to clearly separate consumption, cost, tariff and allocation information.
+- Replaced hard-coded panel colors with Home Assistant theme variables.
+- Kept existing v1.3.x periods backwards compatible as single-rate periods.
+
 ## 1.3.0 — 2026-09-30
 
 - Added editing of existing billing periods while preserving the period identifier.

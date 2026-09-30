@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.3.0"
+VERSION: Final = "1.4.0"
 
 PLATFORMS: Final = ["sensor"]
 
@@ -24,6 +24,8 @@ WS_UPDATE_PERIOD: Final = f"{DOMAIN}/update_period"
 WS_DELETE_PERIOD: Final = f"{DOMAIN}/delete_period"
 WS_REBUILD_STATISTICS: Final = f"{DOMAIN}/rebuild_statistics"
 WS_UPDATE_SETTINGS: Final = f"{DOMAIN}/update_settings"
+WS_TEST_EXPORT: Final = f"{DOMAIN}/test_export"
+WS_SYNC_EXPORT: Final = f"{DOMAIN}/sync_export"
 
 CONF_APARTMENT_NAME: Final = "apartment_name"
 CONF_HEATING_UNIT: Final = "heating_unit"
@@ -40,6 +42,62 @@ CONF_VALUE: Final = "value"
 CONF_COST: Final = "cost"
 CONF_NOTE: Final = "note"
 CONF_PERIOD_ID: Final = "period_id"
+
+# Electricity billing and allocation
+CONF_TARIFF_MODE: Final = "tariff_mode"
+CONF_PEAK_VALUE: Final = "peak_value"
+CONF_OFFPEAK_VALUE: Final = "offpeak_value"
+CONF_PEAK_COST: Final = "peak_cost"
+CONF_OFFPEAK_COST: Final = "offpeak_cost"
+TARIFF_SINGLE: Final = "single"
+TARIFF_PEAK_OFFPEAK: Final = "peak_offpeak"
+TARIFF_MODES: Final = (TARIFF_SINGLE, TARIFF_PEAK_OFFPEAK)
+
+CONF_ELECTRICITY_DISTRIBUTION: Final = "electricity_distribution"
+CONF_ELECTRICITY_LOAD_SENSOR: Final = "electricity_load_sensor"
+CONF_LOAD_CURVE_SOURCE: Final = "load_curve_source"
+CONF_LOAD_CURVE_MIN_COVERAGE: Final = "load_curve_min_coverage"
+CONF_VM_LOAD_METRIC: Final = "vm_load_metric"
+CONF_VM_LOAD_DB_LABEL: Final = "vm_load_db_label"
+
+DISTRIBUTION_LOAD_CURVE: Final = "load_curve"
+LOAD_CURVE_AUTO: Final = "auto"
+LOAD_CURVE_VICTORIAMETRICS: Final = "victoriametrics"
+LOAD_CURVE_RECORDER: Final = "recorder"
+LOAD_CURVE_SOURCES: Final = (
+    LOAD_CURVE_AUTO,
+    LOAD_CURVE_VICTORIAMETRICS,
+    LOAD_CURVE_RECORDER,
+)
+DEFAULT_LOAD_CURVE_MIN_COVERAGE: Final = 0.90
+DEFAULT_VM_LOAD_METRIC: Final = "W_value"
+DEFAULT_VM_LOAD_DB_LABEL: Final = "homeassistant"
+
+# External time-series export
+CONF_EXPORT_BACKEND: Final = "export_backend"
+CONF_EXPORT_URL: Final = "export_url"
+CONF_EXPORT_AUTO_SYNC: Final = "export_auto_sync"
+CONF_EXPORT_DATABASE: Final = "export_database"
+CONF_EXPORT_RETENTION_POLICY: Final = "export_retention_policy"
+CONF_EXPORT_ORG: Final = "export_org"
+CONF_EXPORT_BUCKET: Final = "export_bucket"
+CONF_EXPORT_USERNAME: Final = "export_username"
+CONF_EXPORT_PASSWORD: Final = "export_password"
+CONF_EXPORT_TOKEN: Final = "export_token"
+CONF_EXPORT_DELETE_AUTH_KEY: Final = "export_delete_auth_key"
+
+EXPORT_NONE: Final = "none"
+EXPORT_VICTORIAMETRICS: Final = "victoriametrics"
+EXPORT_INFLUXDB_V1: Final = "influxdb_v1"
+EXPORT_INFLUXDB_V2: Final = "influxdb_v2"
+EXPORT_INFLUXDB_V3: Final = "influxdb_v3"
+EXPORT_BACKENDS: Final = (
+    EXPORT_NONE,
+    EXPORT_VICTORIAMETRICS,
+    EXPORT_INFLUXDB_V1,
+    EXPORT_INFLUXDB_V2,
+    EXPORT_INFLUXDB_V3,
+)
 
 TYPE_WATER: Final = "water"
 TYPE_HOT_WATER: Final = "hot_water"
@@ -74,6 +132,7 @@ SERVICE_ADD_PERIOD: Final = "add_period"
 SERVICE_UPDATE_PERIOD: Final = "update_period"
 SERVICE_DELETE_PERIOD: Final = "delete_period"
 SERVICE_REBUILD_STATISTICS: Final = "rebuild_statistics"
+SERVICE_SYNC_EXPORT: Final = "sync_export"
 
 ATTR_PERIODS_COUNT: Final = "periods_count"
 ATTR_LAST_PERIOD_START: Final = "last_period_start"

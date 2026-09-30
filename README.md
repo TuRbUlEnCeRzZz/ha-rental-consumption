@@ -4,35 +4,32 @@
 [![Validate](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml/badge.svg)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/actions/workflows/validate.yml)
 [![Version](https://img.shields.io/github/v/release/TuRbUlEnCeRzZz/ha-rental-consumption?include_prereleases)](https://github.com/TuRbUlEnCeRzZz/ha-rental-consumption/releases)
 
-Custom integration for **Home Assistant OS**, primarily developed for Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
+Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It lets you enter historical consumption and billing data received from a property manager, landlord, distribution system operator or utility provider. The integration reconstructs these periods inside Home Assistant Recorder using external long-term statistics, so consumption is assigned to its actual historical dates rather than only to the date on which the bill was entered.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day.
 
-## Features
+## Highlights
 
-- Dedicated sidebar panel and integration options;
-- add, edit and delete historical billing periods;
-- total water and hot water in m³ as separate series;
-- heating in kWh, MWh, GJ or allocation units;
-- electricity in kWh;
-- optional total cost for every consumption type;
-- cumulative known cost and weighted average unit price per consumption type;
-- historical external Recorder statistics for consumption and cost;
-- manual DSO / supplier name;
-- uniform daily allocation or heating allocation based on outdoor-temperature degree days;
-- automatic fallback to uniform heating allocation when Recorder temperature data is insufficient;
-- overlap validation and full reconstruction after additions, edits or deletions;
-- persistent storage included in Home Assistant backups;
-- French and English interface;
-- responsive sidebar panel for desktop and mobile use.
+- Total water, hot water, heating and electricity billing periods;
+- optional costs and weighted average unit prices;
+- single electricity tariff or peak / off-peak billing;
+- editable periods with stable identifiers;
+- historical Recorder statistics;
+- heating allocation by outdoor-temperature degree days;
+- electricity allocation by actual incoming load curve;
+- automatic load-curve source selection: VictoriaMetrics first, then Recorder fallback;
+- configurable minimum load-curve coverage;
+- optional historical export to VictoriaMetrics or InfluxDB;
+- native Home Assistant theme variables in the sidebar panel;
+- one responsive history layout for desktop and mobile.
 
 ## Compatibility
 
 - Home Assistant Core **2026.7.4 or newer**;
-- Home Assistant OS;
-- Raspberry Pi 4 remains the primary target;
-- installation and updates through HACS;
-- no external Python libraries.
+- tested against the current Home Assistant OS/Core release during development;
+- Home Assistant OS on Raspberry Pi 4 remains the primary target;
+- HACS custom repository installation;
+- no external Python packages.
 
 ## Installation with HACS
 
@@ -43,64 +40,115 @@ It lets you enter historical consumption and billing data received from a proper
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
 
-## Consumption periods
+## Electricity billing
 
-A period represents the total billed consumption between two inclusive dates. Periods of the same consumption type may not overlap.
+### Single tariff
 
-Existing periods can be edited without deleting and recreating them. The stable period identifier is preserved and the affected historical statistics are rebuilt after the correction.
+For a single-rate bill, enter:
 
-## Costs
+- total kWh;
+- optional total cost;
+- billing dates.
 
-An optional total cost can be stored for:
-
-- total water;
-- hot water;
-- heating;
-- electricity.
-
-For each type, the integration calculates the known cumulative cost and the consumption-weighted average unit price. Periods without a price remain valid and are simply excluded from price calculations.
-
-## Total water and hot water
-
-`Total Water` and `Hot Water` are intentionally separate series. Hot water is **not added again** to the total-water value. This supports billing statements where the main meter provides total water and a separate sub-meter provides the hot-water share.
-
-## Heating based on outdoor temperature
-
-In **Rental Consumption → Settings**:
-
-1. select **Outdoor-temperature degree days**;
-2. select a sensor with the `temperature` device class;
-3. choose the base temperature (default **20 °C**);
-4. save the settings.
-
-For each day, the weighting factor is:
+Example:
 
 ```text
-max(base temperature − average outdoor temperature, 0)
+01.05.2026 → 31.07.2026
+649 kWh
+CHF 205.78
+CHF 0.31707/kWh
 ```
 
-The billed total remains unchanged; only its allocation across days changes. Days without usable temperature statistics use a fallback weight. If no meaningful Recorder statistics are available, the period remains uniformly distributed.
+### Peak / off-peak
 
-The panel reports temperature coverage, mean outdoor temperature, weighted/fallback periods and, when enough periods are available, the Pearson correlation between outdoor temperature and actual billed daily heating consumption.
+For dual-rate billing, select **Peak / off-peak** and enter the billed split:
 
-> The selected temperature sensor should remain included in Recorder and should preferably use `state_class: measurement`.
+- total consumption;
+- peak consumption;
+- off-peak consumption;
+- optional total cost;
+- optional peak cost;
+- optional off-peak cost.
 
-## Home Assistant entities
+Peak + off-peak consumption must equal the billed total. When all three cost values are supplied, peak + off-peak cost must also equal the total cost.
 
-For every consumption type the integration exposes:
+The integration stores the exact billing split. It does **not** invent a peak/off-peak split from tariff schedules when the bill already provides one.
 
-- imported total summary;
-- latest period;
-- total known cost;
-- weighted average unit price.
+## Electricity load-curve allocation
 
-A separate **Stored Periods** sensor reports the number of billing periods.
+Uniform allocation remains available, but v1.4.0 adds a second mode:
 
-The summary entities intentionally represent current summaries only. The historical time series is stored in the integration-owned external Recorder statistics.
+```text
+Electricity distribution
+○ Uniform per day
+● Load-curve weighted
+```
 
-## External statistics
+The billed total always remains exact. Only the daily distribution changes.
 
-Consumption:
+For example, if the incoming power history indicates that three days represent 20%, 30% and 50% of the observed load shape, a 100 kWh bill is reconstructed as:
+
+```text
+Day 1 → 20 kWh
+Day 2 → 30 kWh
+Day 3 → 50 kWh
+```
+
+### Source priority
+
+In **Automatic** mode:
+
+```text
+1. VictoriaMetrics
+2. Home Assistant Recorder
+3. Uniform fallback
+```
+
+VictoriaMetrics is used first when:
+
+- the external export backend is VictoriaMetrics;
+- its URL is configured;
+- the selected power entity exists in the VictoriaMetrics schema expected by the integration.
+
+The default VictoriaMetrics source query assumes the Home Assistant layout used by common HA → VictoriaMetrics pipelines:
+
+```text
+W_value{
+  db="homeassistant",
+  domain="sensor",
+  entity_id="<entity object id>"
+}
+```
+
+Both `W_value` and the `db` label are configurable.
+
+Recorder fallback uses the long-term daily mean statistics of the selected power sensor.
+
+### Coverage
+
+The default minimum load-curve coverage is **90%**.
+
+If the selected source covers less than the configured threshold, the integration tries the next source. If neither source provides enough history, the period stays uniformly distributed.
+
+Per-period diagnostics show:
+
+- effective distribution;
+- source used;
+- percentage coverage;
+- fallback state.
+
+## Heating allocation
+
+Heating can still be distributed:
+
+- uniformly; or
+- from outdoor-temperature heating degree days.
+
+The billed total remains exact.
+
+## Historical statistics in Home Assistant
+
+Consumption statistics:
 
 ```text
 rental_consumption:<entry_id>_water
@@ -109,7 +157,7 @@ rental_consumption:<entry_id>_heating
 rental_consumption:<entry_id>_electricity
 ```
 
-Costs:
+Cost statistics:
 
 ```text
 rental_consumption:<entry_id>_water_cost
@@ -118,13 +166,117 @@ rental_consumption:<entry_id>_heating_cost
 rental_consumption:<entry_id>_electricity_cost
 ```
 
-Adding a bill today for a past period reconstructs the Recorder statistics at the historical dates covered by that bill.
+Billing periods remain the source of truth. Recorder statistics can be completely regenerated at any time.
+
+## External time-series export
+
+v1.4.0 can optionally write the reconstructed daily billing history to a separate time-series database.
+
+The exported measurements are intentionally separated from physical meter measurements:
+
+```text
+rental_consumption
+rental_consumption_cost
+rental_consumption_tariff
+```
+
+Each point includes tags such as:
+
+```text
+integration=rental_consumption
+source=billing
+entry_id=<config entry>
+period_id=<stable period id>
+consumption_type=electricity
+tariff_mode=single
+```
+
+This prevents reconstructed billing data from being confused with physical `W_value`, `kWh_value`, Shelly, smart-plug or meter series.
 
 ### VictoriaMetrics
 
-Recorder external statistics are **not automatically backfilled into VictoriaMetrics**. If Home Assistant forwards state changes to VictoriaMetrics, a historical bill can change a summary sensor today without creating retrospective VictoriaMetrics samples for each reconstructed day.
+Supported:
 
-Optional native VictoriaMetrics historical backfill is planned for a future release.
+- historical writes through Influx line protocol;
+- connection test;
+- full apartment rebuild;
+- stable period replacement;
+- automatic synchronization after additions/edits/deletions;
+- optional `deleteAuthKey`.
+
+The integration uses dedicated `period_id` labels so replacing a corrected period does not affect unrelated data.
+
+### InfluxDB 1.x
+
+Supported:
+
+- `/write`;
+- database;
+- optional retention policy;
+- username/password;
+- delete-and-rewrite using InfluxQL;
+- safe rebuild and automatic synchronization.
+
+### InfluxDB 2.x
+
+Supported:
+
+- `/api/v2/write`;
+- organization;
+- bucket;
+- API token;
+- `/api/v2/delete`;
+- safe rebuild and automatic synchronization.
+
+### InfluxDB 3.x
+
+Supported for writing through `/api/v3/write_lp`.
+
+InfluxDB 3 deployments do not all expose the same safe row-deletion capability. For that reason, v1.4.0 deliberately treats generic InfluxDB 3 as **write-compatible but not safe-rebuild capable**.
+
+Consequences:
+
+- writing new periods is supported;
+- full delete-and-rebuild is disabled by default;
+- automatic correction/deletion is not claimed safe.
+
+This avoids silently leaving stale billing points behind.
+
+## Home Assistant theme integration
+
+The sidebar panel no longer carries its own fixed dark visual palette.
+
+It uses Home Assistant theme variables such as:
+
+```text
+--primary-background-color
+--secondary-background-color
+--card-background-color
+--primary-text-color
+--secondary-text-color
+--primary-color
+--divider-color
+--error-color
+```
+
+As a result, the panel follows the currently selected Home Assistant theme, including custom themes.
+
+## Responsive history UX
+
+v1.4.0 replaces the old duplicated desktop-table/mobile-card rendering with a **single responsive period component**.
+
+Each period shows:
+
+- type and dates;
+- total consumption and daily average;
+- cost and unit price;
+- tariff mode;
+- effective distribution;
+- load-curve source;
+- coverage;
+- edit/delete actions.
+
+Filters are available by consumption type and year.
 
 ## Available actions
 
@@ -132,8 +284,9 @@ Optional native VictoriaMetrics historical backfill is planned for a future rele
 - `rental_consumption.update_period`
 - `rental_consumption.delete_period`
 - `rental_consumption.rebuild_statistics`
+- `rental_consumption.sync_export`
 
-### Add a period
+Example single-rate electricity period:
 
 ```yaml
 action: rental_consumption.add_period
@@ -142,43 +295,60 @@ data:
   consumption_type: electricity
   start_date: "2026-05-01"
   end_date: "2026-07-31"
-  value: 1320.5
-  cost: 387.40
-  note: "Quarterly bill from the DSO"
+  value: 649
+  cost: 205.78
+  tariff_mode: single
 ```
 
-### Update a period
+Example peak/off-peak period:
 
 ```yaml
-action: rental_consumption.update_period
+action: rental_consumption.add_period
 data:
   config_entry_id: "0123456789abcdef0123456789abcdef"
-  period_id: "0123456789abcdef0123456789abcdef"
   consumption_type: electricity
-  start_date: "2026-05-01"
-  end_date: "2026-07-31"
-  value: 1318.2
-  cost: 386.90
-  note: "Corrected quarterly bill"
+  start_date: "2026-01-01"
+  end_date: "2026-03-31"
+  value: 900
+  cost: 270
+  tariff_mode: peak_offpeak
+  peak_value: 620
+  offpeak_value: 280
+  peak_cost: 205
+  offpeak_cost: 65
 ```
 
-## Updating from v1.2.x
+## Updating from v1.3.x
 
-Existing v1.0, v1.1 and v1.2 periods remain compatible.
+Existing periods remain compatible.
 
-After updating through HACS:
+Older electricity periods automatically behave as:
+
+```text
+tariff_mode = single
+```
+
+After updating:
 
 1. restart Home Assistant completely;
-2. open **Rental Consumption** from the sidebar;
-3. verify the provider, currency and heating settings;
-4. optionally run **Rebuild statistics**.
-
-Existing electricity prices remain intact. Older water, hot-water and heating periods simply have no cost until one is entered or the period is edited.
+2. open **Rental Consumption**;
+3. configure the main incoming power sensor if load-curve allocation is desired;
+4. leave external auto-sync disabled initially;
+5. test the external database connection;
+6. rebuild external history manually;
+7. inspect the result in Grafana / your database;
+8. enable auto-sync only after validation.
 
 ## Data and backups
 
-Billing periods are the source of truth and are stored using Home Assistant persistent storage. They are included in normal **Home Assistant OS backups**. External statistics can be regenerated from these stored periods at any time with **Rebuild statistics**.
+Billing periods are stored in Home Assistant persistent storage and are included in normal **Home Assistant OS backups**.
+
+External databases are optional mirrors. They do not replace the stored billing periods as the integration's source of truth.
+
+## Security
+
+Passwords, tokens and VictoriaMetrics `deleteAuthKey` values are not returned to the sidebar after saving and are redacted from Home Assistant diagnostics.
 
 ## License
 
-See the `LICENSE` file in this repository.
+See `LICENSE`.

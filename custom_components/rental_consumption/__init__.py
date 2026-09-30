@@ -20,8 +20,13 @@ from .const import (
     CONF_END_DATE,
     CONF_ENTRY_ID,
     CONF_NOTE,
+    CONF_OFFPEAK_COST,
+    CONF_OFFPEAK_VALUE,
+    CONF_PEAK_COST,
+    CONF_PEAK_VALUE,
     CONF_PERIOD_ID,
     CONF_START_DATE,
+    CONF_TARIFF_MODE,
     CONF_VALUE,
     CONSUMPTION_TYPES,
     DOMAIN,
@@ -29,8 +34,11 @@ from .const import (
     SERVICE_ADD_PERIOD,
     SERVICE_DELETE_PERIOD,
     SERVICE_REBUILD_STATISTICS,
+    SERVICE_SYNC_EXPORT,
     SERVICE_UPDATE_PERIOD,
+    TARIFF_MODES,
 )
+from .exporter import ExportError
 from .frontend import async_register_frontend, async_unregister_frontend
 from .manager import RentalConsumptionManager
 from .models import PeriodValidationError
@@ -47,6 +55,11 @@ _PERIOD_FIELDS = {
     vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
     vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
     vol.Optional(CONF_NOTE, default=""): cv.string,
+    vol.Optional(CONF_TARIFF_MODE): vol.In(TARIFF_MODES),
+    vol.Optional(CONF_PEAK_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_OFFPEAK_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_PEAK_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_OFFPEAK_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
 }
 ADD_PERIOD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string, **_PERIOD_FIELDS})
 UPDATE_PERIOD_SCHEMA = vol.Schema(
@@ -60,6 +73,17 @@ DELETE_PERIOD_SCHEMA = vol.Schema(
     {vol.Required(CONF_ENTRY_ID): cv.string, vol.Required(CONF_PERIOD_ID): cv.string}
 )
 REBUILD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string})
+
+
+def _period_kwargs(data: dict[str, Any], *, preserve: bool = False) -> dict[str, Any]:
+    tariff_mode = data.get(CONF_TARIFF_MODE)
+    return {
+        "tariff_mode": (None if preserve else "single") if tariff_mode is None else str(tariff_mode),
+        "peak_value": data.get(CONF_PEAK_VALUE),
+        "offpeak_value": data.get(CONF_OFFPEAK_VALUE),
+        "peak_cost": data.get(CONF_PEAK_COST),
+        "offpeak_cost": data.get(CONF_OFFPEAK_COST),
+    }
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -86,6 +110,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 float(call.data[CONF_VALUE]),
                 str(call.data.get(CONF_NOTE, "")),
                 None if CONF_COST not in call.data else float(call.data[CONF_COST]),
+                **_period_kwargs(call.data),
             )
         except PeriodValidationError as err:
             raise HomeAssistantError(err.code) from err
@@ -101,6 +126,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 float(call.data[CONF_VALUE]),
                 str(call.data.get(CONF_NOTE, "")),
                 None if CONF_COST not in call.data else float(call.data[CONF_COST]),
+                **_period_kwargs(call.data, preserve=True),
             )
         except PeriodValidationError as err:
             raise HomeAssistantError(err.code) from err
@@ -115,6 +141,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_rebuild(call: ServiceCall) -> None:
         await get_manager(call).async_rebuild_statistics()
 
+    async def handle_sync_export(call: ServiceCall) -> None:
+        try:
+            await get_manager(call).async_sync_export()
+        except ExportError as err:
+            raise HomeAssistantError(str(err)) from err
+
     if not hass.services.has_service(DOMAIN, SERVICE_ADD_PERIOD):
         hass.services.async_register(
             DOMAIN, SERVICE_ADD_PERIOD, handle_add_period, schema=ADD_PERIOD_SCHEMA
@@ -127,6 +159,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         )
         hass.services.async_register(
             DOMAIN, SERVICE_REBUILD_STATISTICS, handle_rebuild, schema=REBUILD_SCHEMA
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_SYNC_EXPORT, handle_sync_export, schema=REBUILD_SCHEMA
         )
     return True
 
@@ -175,11 +210,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Remove stored periods and external statistics when the entry is deleted."""
+    """Remove stored periods and Recorder statistics when the entry is deleted."""
     manager = RentalConsumptionManager.create(hass, entry)
     await manager.async_remove_data()
 
 
 def _as_date(value: date | str) -> date:
-    """Normalize service date input."""
     return value if isinstance(value, date) else date.fromisoformat(str(value))
