@@ -159,7 +159,7 @@ class TimeSeriesExporter:
         raise ExportError("unsupported_backend", steps=steps)
 
     async def _async_test_victoriametrics(self) -> dict[str, Any]:
-        """Verify VictoriaMetrics health, write, raw read and delete capabilities."""
+        """Verify VictoriaMetrics health, write, query read and delete capabilities."""
         steps: dict[str, str] = {}
         test_id = uuid4().hex
         timestamp = int(datetime.now(tz=timezone.utc).timestamp())
@@ -200,21 +200,17 @@ class TimeSeriesExporter:
             wrote_test_point = True
             steps["write"] = "ok"
 
-            # Raw export is used instead of assuming VictoriaMetrics' final
-            # measurement_field metric name. Retry briefly because a successful
-            # ingestion can become query-visible a fraction of a second later.
+            # Read through the Prometheus query API instead of guessing the
+            # measurement_field metric name produced by the Influx line-protocol
+            # importer. This is the same query surface used by the load-curve
+            # reader and works with any final metric name as long as our unique
+            # connection-test labels are preserved.
             read_deadline = asyncio.get_running_loop().time() + 5.0
             last_body = ""
             while True:
-                params = [
-                    ("match[]", selector),
-                    ("start", str(timestamp - 10)),
-                    ("end", str(timestamp + 10)),
-                    ("reduce_mem_usage", "1"),
-                ]
                 async with self.session.get(
-                    f"{self._base()}/api/v1/export",
-                    params=params,
+                    f"{self._base()}/prometheus/api/v1/query",
+                    params={"query": selector, "time": str(timestamp + 1)},
                     headers=self._headers(),
                     auth=self._auth(),
                 ) as response:
@@ -224,7 +220,18 @@ class TimeSeriesExporter:
                             f"read_failed:{response.status}:{last_body[:300]}",
                             steps=steps,
                         )
-                    if test_id in last_body:
+                    try:
+                        payload = json.loads(last_body)
+                    except json.JSONDecodeError as err:
+                        raise ExportError(
+                            f"read_failed:invalid_json:{last_body[:300]}",
+                            steps=steps,
+                        ) from err
+                    results = payload.get("data", {}).get("result", [])
+                    if any(
+                        str(item.get("metric", {}).get("test_id", "")) == test_id
+                        for item in results
+                    ):
                         break
                 if asyncio.get_running_loop().time() >= read_deadline:
                     raise ExportError("read_failed:test_point_not_found", steps=steps)

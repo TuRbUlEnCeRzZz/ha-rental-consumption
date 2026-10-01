@@ -9,6 +9,7 @@ from custom_components.rental_consumption.const import (
     TARIFF_SINGLE,
     TYPE_ELECTRICITY,
     TYPE_HEATING,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
 )
 from custom_components.rental_consumption.models import (
@@ -185,3 +186,33 @@ def test_statistic_entry_key_normalizes_current_ulid_and_legacy_values() -> None
     assert normalize_statistic_entry_key("01K6ABCDEF1234567890XYZABC") == "01k6abcdef1234567890xyzabc"
     assert normalize_statistic_entry_key("ABC-DEF__GHI") == "abc_def_ghi"
     assert normalize_statistic_entry_key("___") == "entry"
+
+
+def test_pv_supply_is_separate_and_forces_single_tariff() -> None:
+    period = ConsumptionPeriod.create(
+        TYPE_PV_ELECTRICITY,
+        date(2026, 6, 1),
+        date(2026, 6, 30),
+        120,
+        cost=18,
+        provider="RCP solaire",
+        tariff_mode=TARIFF_PEAK_OFFPEAK,
+        peak_value=80,
+        offpeak_value=40,
+    )
+    validate_period(period, [], date(2026, 9, 30))
+    assert period.tariff_mode == TARIFF_SINGLE
+    assert period.peak_value is None
+    assert period.offpeak_value is None
+    assert period.unit_price == pytest.approx(0.15)
+
+
+def test_grid_and_pv_periods_may_overlap() -> None:
+    grid = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY, date(2026, 6, 1), date(2026, 6, 30), 200
+    )
+    pv = ConsumptionPeriod.create(
+        TYPE_PV_ELECTRICITY, date(2026, 6, 1), date(2026, 6, 30), 100
+    )
+    validate_period(grid, [pv], date(2026, 9, 30))
+    validate_period(pv, [grid], date(2026, 9, 30))

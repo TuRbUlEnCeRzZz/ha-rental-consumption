@@ -38,6 +38,7 @@ from .const import (
     TYPE_ELECTRICITY,
     TYPE_HEATING,
     TYPE_HOT_WATER,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
 )
 from .manager import RentalConsumptionManager
@@ -136,6 +137,7 @@ class RentalConsumptionOptionsFlow(OptionsFlow):
                 "add_hot_water",
                 "add_heating",
                 "add_electricity",
+                "add_pv_electricity",
                 "edit_period",
                 "settings",
                 "delete_period",
@@ -154,6 +156,9 @@ class RentalConsumptionOptionsFlow(OptionsFlow):
 
     async def async_step_add_electricity(self, user_input=None) -> ConfigFlowResult:
         return await self._async_step_add(TYPE_ELECTRICITY, "add_electricity", user_input)
+
+    async def async_step_add_pv_electricity(self, user_input=None) -> ConfigFlowResult:
+        return await self._async_step_add(TYPE_PV_ELECTRICITY, "add_pv_electricity", user_input)
 
     async def _async_step_add(
         self,
@@ -397,7 +402,8 @@ class RentalConsumptionOptionsFlow(OptionsFlow):
             TYPE_WATER: "Water",
             TYPE_HOT_WATER: "Hot water",
             TYPE_HEATING: "Heating",
-            TYPE_ELECTRICITY: "Electricity",
+            TYPE_ELECTRICITY: "Grid electricity",
+            TYPE_PV_ELECTRICITY: "PV electricity supply",
         }
         return [
             {

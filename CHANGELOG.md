@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.2 — 2026-10-01
+
+- Fixed the VictoriaMetrics connection-test false negative seen after successful writes and historical backfills.
+- Replaced the temporary-point raw-export read-back with a Prometheus instant query using unique integration/test labels.
+- Kept the 5-second retry window before declaring the temporary point unreadable.
+- Kept best-effort cleanup of temporary VictoriaMetrics connection-test series.
+- Added **PV electricity supply** as a separate billed consumption type (`pv_electricity`).
+- Added PV supply totals, costs, weighted average price and latest-period sensors.
+- Added dedicated Recorder consumption and cost statistics for PV supply.
+- Added PV supply to the sidebar overview, add/edit period form, history filter and period cards.
+- Added PV supply to service schemas, options flow, diagnostics and translations.
+- Added PV supply to external VictoriaMetrics / InfluxDB exports through the existing `consumption_type` tag.
+- PV supply uses uniform daily reconstruction in v1.5.2; PV-specific curve analysis remains planned for v1.6.0.
+- Fixed a duplicated frontend period payload declaration and a duplicated heating unit mapping in WebSocket serialization.
+
 ## 1.5.1 — 2026-10-01
 
 - Added direct multi-dwelling management from the sidebar.

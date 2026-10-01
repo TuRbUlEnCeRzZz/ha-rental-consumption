@@ -15,6 +15,7 @@ from .const import (
     TYPE_ELECTRICITY,
     TYPE_HEATING,
     TYPE_HOT_WATER,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
 )
 from .manager import RentalConsumptionManager
@@ -42,10 +43,11 @@ async def async_get_config_entry_diagnostics(
             "hot_water": manager.count(TYPE_HOT_WATER),
             "heating": manager.count(TYPE_HEATING),
             "electricity": manager.count(TYPE_ELECTRICITY),
+            "pv_electricity": manager.count(TYPE_PV_ELECTRICITY),
         },
         "statistics": {
             metric: manager.statistic_id(metric)
-            for metric in (TYPE_WATER, TYPE_HOT_WATER, TYPE_HEATING, TYPE_ELECTRICITY)
+            for metric in (TYPE_WATER, TYPE_HOT_WATER, TYPE_HEATING, TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY)
         },
         "heating_analysis": manager.heating_analysis,
         "electricity_analysis": manager.electricity_analysis,

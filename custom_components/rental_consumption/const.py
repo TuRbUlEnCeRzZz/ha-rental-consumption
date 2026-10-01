@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.5.1"
+VERSION: Final = "1.5.2"
 
 PLATFORMS: Final = ["sensor"]
 
@@ -107,12 +107,14 @@ TYPE_WATER: Final = "water"
 TYPE_HOT_WATER: Final = "hot_water"
 TYPE_HEATING: Final = "heating"
 TYPE_ELECTRICITY: Final = "electricity"
-ConsumptionType = Literal["water", "hot_water", "heating", "electricity"]
+TYPE_PV_ELECTRICITY: Final = "pv_electricity"
+ConsumptionType = Literal["water", "hot_water", "heating", "electricity", "pv_electricity"]
 CONSUMPTION_TYPES: Final = (
     TYPE_WATER,
     TYPE_HOT_WATER,
     TYPE_HEATING,
     TYPE_ELECTRICITY,
+    TYPE_PV_ELECTRICITY,
 )
 
 HEATING_UNIT_KWH: Final = "kWh"

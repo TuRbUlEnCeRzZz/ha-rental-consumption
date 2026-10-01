@@ -15,7 +15,8 @@ add_period:
             - {label: Eau totale, value: water}
             - {label: Eau chaude, value: hot_water}
             - {label: Chauffage, value: heating}
-            - {label: Électricité, value: electricity}
+            - {label: Électricité réseau, value: electricity}
+            - {label: Fourniture PV, value: pv_electricity}
     start_date: {name: Début, required: true, selector: {date: {}}}
     end_date: {name: Fin, required: true, selector: {date: {}}}
     value:
@@ -75,7 +76,8 @@ update_period:
             - {label: Eau totale, value: water}
             - {label: Eau chaude, value: hot_water}
             - {label: Chauffage, value: heating}
-            - {label: Électricité, value: electricity}
+            - {label: Électricité réseau, value: electricity}
+            - {label: Fourniture PV, value: pv_electricity}
     start_date: {name: Début, required: true, selector: {date: {}}}
     end_date: {name: Fin, required: true, selector: {date: {}}}
     value: {name: Consommation totale, required: true, selector: {number: {min: 0.001, max: 1000000000, step: any, mode: box}}}

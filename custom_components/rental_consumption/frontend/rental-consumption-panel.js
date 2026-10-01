@@ -48,7 +48,8 @@ class RentalConsumptionPanel extends HTMLElement {
         water: "Eau totale",
         hotWater: "Eau chaude",
         heating: "Chauffage",
-        electricity: "Électricité",
+        electricity: "Électricité réseau",
+        pvElectricity: "Fourniture PV",
         providerDefault: "GRD / fournisseur par défaut",
         providerDefaultHelp: "Utilisé pour préremplir les nouvelles périodes. Les périodes existantes conservent leur fournisseur.",
         provider: "GRD / fournisseur",
@@ -176,7 +177,8 @@ class RentalConsumptionPanel extends HTMLElement {
         water: "Total water",
         hotWater: "Hot water",
         heating: "Heating",
-        electricity: "Electricity",
+        electricity: "Grid electricity",
+        pvElectricity: "PV electricity supply",
         providerDefault: "Default DSO / supplier",
         providerDefaultHelp: "Used to prefill new periods. Existing periods keep their own supplier.",
         provider: "DSO / supplier",
@@ -331,7 +333,7 @@ class RentalConsumptionPanel extends HTMLElement {
   }
 
   _typeLabel(type) {
-    return ({ water: this._t("water"), hot_water: this._t("hotWater"), heating: this._t("heating"), electricity: this._t("electricity") })[type] || type;
+    return ({ water: this._t("water"), hot_water: this._t("hotWater"), heating: this._t("heating"), electricity: this._t("electricity"), pv_electricity: this._t("pvElectricity") })[type] || type;
   }
 
   _distributionLabel(value) {
@@ -418,7 +420,7 @@ class RentalConsumptionPanel extends HTMLElement {
   }
 
   _overview(entry) {
-    const types = ["water", "hot_water", "heating", "electricity"];
+    const types = ["water", "hot_water", "heating", "electricity", "pv_electricity"];
     const exportStatus = entry.export?.last_status || {};
     return `
       <section class="summary-grid">
@@ -447,7 +449,7 @@ class RentalConsumptionPanel extends HTMLElement {
           <button class="button subtle" data-action="rebuild" ${this._busyAction ? "disabled" : ""}>${this._busyAction === "rebuild" ? "…" : this._t("rebuild")}</button>
         </div>
         <div class="history-toolbar">
-          <select id="history-type"><option value="all">${this._t("allTypes")}</option>${["electricity", "water", "hot_water", "heating"].map((type) => `<option value="${type}" ${this._historyType === type ? "selected" : ""}>${this._typeLabel(type)}</option>`).join("")}</select>
+          <select id="history-type"><option value="all">${this._t("allTypes")}</option>${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((type) => `<option value="${type}" ${this._historyType === type ? "selected" : ""}>${this._typeLabel(type)}</option>`).join("")}</select>
           <select id="history-year"><option value="all">${this._t("allYears")}</option>${years.map((year) => `<option value="${year}" ${this._historyYear === year ? "selected" : ""}>${year}</option>`).join("")}</select>
           <select id="history-provider"><option value="all">${this._t("allProviders")}</option>${providers.map((provider) => `<option value="${this._escape(provider)}" ${this._historyProvider === provider ? "selected" : ""}>${this._escape(provider)}</option>`).join("")}</select>
         </div>
@@ -576,7 +578,7 @@ class RentalConsumptionPanel extends HTMLElement {
     return `<section class="card edit-card">
       <div class="section-header"><h2>${period ? this._t("editPeriod") : this._t("addPeriod")}</h2>${period ? `<button class="button subtle" data-action="cancel-edit">${this._t("cancel")}</button>` : ""}</div>
       <form id="period-form"><div class="form-grid">
-        ${this._field(this._t("type"), `<select name="consumption_type" id="consumption-type">${["electricity", "water", "hot_water", "heating"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${this._typeLabel(item)}</option>`).join("")}</select>`)}
+        ${this._field(this._t("type"), `<select name="consumption_type" id="consumption-type">${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${this._typeLabel(item)}</option>`).join("")}</select>`)}
         ${this._field(this._t("start"), `<input name="start_date" type="date" value="${period?.start_date || ""}" required>`)}
         ${this._field(this._t("end"), `<input name="end_date" type="date" value="${period?.end_date || ""}" required>`)}
         ${this._field(this._t("provider"), `<input name="provider" value="${this._escape(provider)}" placeholder="${this._escape(entry.settings.grid_operator || "")}">`)}
@@ -603,7 +605,7 @@ class RentalConsumptionPanel extends HTMLElement {
     const analysis = period.electricity_analysis || period.heating_analysis || {};
     const coverage = analysis.coverage ?? analysis.temperature_coverage;
     return `<article class="period-row">
-      <div class="period-main"><div class="type-icon">${period.consumption_type === "electricity" ? "⚡" : period.consumption_type === "heating" ? "♨" : "💧"}</div><div><strong>${this._typeLabel(period.consumption_type)}</strong><span>${this._date(period.start_date)} – ${this._date(period.end_date)} · ${period.days} j</span><small class="provider-line">${this._escape(period.provider || this._t("noProvider"))}</small></div></div>
+      <div class="period-main"><div class="type-icon">${period.consumption_type === "electricity" ? "⚡" : period.consumption_type === "pv_electricity" ? "☀️" : period.consumption_type === "heating" ? "♨" : "💧"}</div><div><strong>${this._typeLabel(period.consumption_type)}</strong><span>${this._date(period.start_date)} – ${this._date(period.end_date)} · ${period.days} j</span><small class="provider-line">${this._escape(period.provider || this._t("noProvider"))}</small></div></div>
       <div class="metric"><span>${this._t("consumption")}</span><strong>${this._num(period.value, 3)} ${this._escape(entry.units[period.consumption_type])}</strong><small>${this._num(period.daily_average, 3)}/j</small></div>
       <div class="metric"><span>${this._t("totalCost")}</span><strong>${period.cost == null ? "—" : `${this._num(period.cost, 2)} ${this._escape(entry.units.currency)}`}</strong><small>${period.unit_price == null ? "—" : `${this._num(period.unit_price, 4)} ${this._escape(entry.units.unit_prices[period.consumption_type])}`}</small></div>
       <div class="badges">${period.consumption_type === "electricity" ? `<span class="badge">${this._tariffLabel(period.tariff_mode)}</span>` : ""}<span class="badge">${this._distributionLabel(analysis.distribution || "uniform_daily")}</span>${analysis.source ? `<span class="badge accent">${this._escape(analysis.source)}</span>` : ""}${coverage != null ? `<span class="badge">${this._num(coverage * 100, 0)}%</span>` : ""}</div>
@@ -962,7 +964,7 @@ class RentalConsumptionPanel extends HTMLElement {
       .card,.summary-card,.period-row{background:var(--ha-card-background,var(--card-background-color));border-radius:var(--ha-card-border-radius,12px);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,none)}.card{padding:20px;margin-bottom:16px}
       .picker-row{display:grid;grid-template-columns:minmax(280px,1fr) auto;align-items:end;gap:14px}.picker-card label{display:grid;grid-template-columns:auto minmax(240px,1fr);align-items:center;gap:14px}.picker-card span{color:var(--secondary-text-color);font-size:13px}.picker-help{display:block;margin-top:10px}.apartment-actions{display:flex;gap:8px;flex-wrap:wrap}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 16px;padding:4px;background:var(--secondary-background-color);border-radius:12px;border:1px solid var(--divider-color)}.tab{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;cursor:pointer;white-space:nowrap}.tab.active{background:var(--card-background-color);color:var(--primary-color);box-shadow:var(--ha-card-box-shadow,0 1px 3px rgba(0,0,0,.12))}
-      .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.summary-card{padding:16px;border-top:3px solid var(--primary-color)}.summary-card>span,.metric>span,.analysis-grid span,.analysis-mini span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:5px}.summary-card strong{font-size:20px}.summary-card small{font-size:12px}
+      .summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.summary-card{padding:16px;border-top:3px solid var(--primary-color)}.summary-card>span,.metric>span,.analysis-grid span,.analysis-mini span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:5px}.summary-card strong{font-size:20px}.summary-card small{font-size:12px}
       .overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.compact-card{margin-bottom:0}.analysis-mini{display:grid;gap:10px}.analysis-mini>div{display:grid;grid-template-columns:1fr auto;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--divider-color)}.analysis-mini>div:last-child{border-bottom:0;padding-bottom:0}
       .form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.form-grid label,.tariff-grid label{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:12px}.form-grid label small{line-height:1.35}.wide{grid-column:1/-1}
       input,select,textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:8px;padding:9px 10px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit}textarea{resize:vertical}.input-unit{display:flex;border:1px solid var(--divider-color);border-radius:8px;overflow:hidden;background:var(--secondary-background-color)}.input-unit input{border:0;background:transparent}.input-unit span{padding:11px;color:var(--secondary-text-color);white-space:nowrap}

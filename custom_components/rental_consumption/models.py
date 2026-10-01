@@ -88,6 +88,7 @@ class ConsumptionPeriod:
         peak_cost: float | None = None,
         offpeak_cost: float | None = None,
     ) -> "ConsumptionPeriod":
+        is_grid_electricity = consumption_type == TYPE_ELECTRICITY
         return cls(
             period_id=uuid4().hex,
             consumption_type=consumption_type,
@@ -97,11 +98,11 @@ class ConsumptionPeriod:
             cost=None if cost is None else float(cost),
             note=note.strip(),
             provider=provider.strip(),
-            tariff_mode=tariff_mode,
-            peak_value=_float_or_none(peak_value),
-            offpeak_value=_float_or_none(offpeak_value),
-            peak_cost=_float_or_none(peak_cost),
-            offpeak_cost=_float_or_none(offpeak_cost),
+            tariff_mode=tariff_mode if is_grid_electricity else TARIFF_SINGLE,
+            peak_value=_float_or_none(peak_value) if is_grid_electricity else None,
+            offpeak_value=_float_or_none(offpeak_value) if is_grid_electricity else None,
+            peak_cost=_float_or_none(peak_cost) if is_grid_electricity else None,
+            offpeak_cost=_float_or_none(offpeak_cost) if is_grid_electricity else None,
         )
 
     def updated(
@@ -120,6 +121,7 @@ class ConsumptionPeriod:
         peak_cost: float | None = None,
         offpeak_cost: float | None = None,
     ) -> "ConsumptionPeriod":
+        is_grid_electricity = consumption_type == TYPE_ELECTRICITY
         return replace(
             self,
             consumption_type=consumption_type,
@@ -129,11 +131,11 @@ class ConsumptionPeriod:
             cost=None if cost is None else float(cost),
             note=note.strip(),
             provider=self.provider if provider is None else provider.strip(),
-            tariff_mode=tariff_mode or self.tariff_mode,
-            peak_value=_float_or_none(peak_value),
-            offpeak_value=_float_or_none(offpeak_value),
-            peak_cost=_float_or_none(peak_cost),
-            offpeak_cost=_float_or_none(offpeak_cost),
+            tariff_mode=(tariff_mode or self.tariff_mode) if is_grid_electricity else TARIFF_SINGLE,
+            peak_value=_float_or_none(peak_value) if is_grid_electricity else None,
+            offpeak_value=_float_or_none(offpeak_value) if is_grid_electricity else None,
+            peak_cost=_float_or_none(peak_cost) if is_grid_electricity else None,
+            offpeak_cost=_float_or_none(offpeak_cost) if is_grid_electricity else None,
         )
 
     @classmethod

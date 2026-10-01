@@ -6,11 +6,11 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling. Version 1.5.2 stabilizes the VictoriaMetrics connection test and adds separately billed photovoltaic electricity supply.
 
 ## Highlights
 
-- Total water, hot water, heating and electricity billing periods;
+- Total water, hot water, heating, grid electricity and photovoltaic electricity supply billing periods;
 - optional costs and weighted average unit prices;
 - single electricity tariff or peak / off-peak billing;
 - editable periods with stable identifiers;
@@ -26,7 +26,8 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - four persistent internal tabs: Overview, Periods, Analysis and Settings;
 - inline VictoriaMetrics connection diagnostics with health/write/read/delete feedback;
 - multiple dwellings managed directly from the sidebar, one Home Assistant config entry per dwelling;
-- Home Assistant-safe normalized external statistic identifiers.
+- Home Assistant-safe normalized external statistic identifiers;
+- separate PV electricity supply totals, costs, Recorder statistics and external time-series tags.
 
 ## Compatibility
 
@@ -44,6 +45,46 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 4. Restart Home Assistant.
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
+
+
+## What changed in v1.5.2
+
+### VictoriaMetrics connection test
+
+Real-world testing confirmed that historical backfill worked while the temporary connection-test point could still report `read_failed:test_point_not_found`.
+
+v1.5.2 therefore reads the temporary point through the VictoriaMetrics Prometheus instant-query API using the test point's unique ownership labels instead of the raw-export path. It retries for up to five seconds before reporting a read failure, then removes the temporary series through `delete_series`.
+
+The four visible stages remain:
+
+```text
+Server → Write → Read → Delete
+```
+
+This does not change historical backfill. Existing `rental_consumption_value` / `rental_consumption_cost_value` series remain compatible.
+
+### Photovoltaic electricity supply
+
+A new **PV electricity supply** billing type is available for electricity supplied to the dwelling from a photovoltaic installation, collective self-consumption scheme, landlord PV installation or similar billing arrangement.
+
+It is intentionally stored separately from grid electricity:
+
+```text
+electricity       → grid electricity
+pv_electricity    → PV electricity supplied to the dwelling
+```
+
+PV supply supports:
+
+- billed kWh;
+- optional cost;
+- supplier/provider per period;
+- dedicated Home Assistant Recorder statistics;
+- dedicated summary/cost/average-price sensors;
+- history filtering;
+- VictoriaMetrics / InfluxDB export using `consumption_type="pv_electricity"`.
+
+In v1.5.2, PV supply is distributed uniformly across the billing period. PV-specific production/load-curve analysis and charts are deliberately reserved for v1.6.0.
 
 
 ## What changed in v1.5.1
@@ -223,6 +264,7 @@ rental_consumption:<entry_id>_water
 rental_consumption:<entry_id>_hot_water
 rental_consumption:<entry_id>_heating
 rental_consumption:<entry_id>_electricity
+rental_consumption:<entry_id>_pv_electricity
 ```
 
 Cost statistics:
@@ -232,6 +274,7 @@ rental_consumption:<entry_id>_water_cost
 rental_consumption:<entry_id>_hot_water_cost
 rental_consumption:<entry_id>_heating_cost
 rental_consumption:<entry_id>_electricity_cost
+rental_consumption:<entry_id>_pv_electricity_cost
 ```
 
 Billing periods remain the source of truth. Recorder statistics can be completely regenerated at any time.

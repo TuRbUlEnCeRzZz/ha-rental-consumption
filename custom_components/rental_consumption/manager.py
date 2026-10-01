@@ -83,6 +83,7 @@ from .const import (
     TYPE_ELECTRICITY,
     TYPE_HEATING,
     TYPE_HOT_WATER,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
     ConsumptionType,
 )
@@ -106,7 +107,8 @@ _LABELS = {
     TYPE_WATER: "Eau totale",
     TYPE_HOT_WATER: "Eau chaude",
     TYPE_HEATING: "Chauffage",
-    TYPE_ELECTRICITY: "Électricité",
+    TYPE_ELECTRICITY: "Électricité réseau",
+    TYPE_PV_ELECTRICITY: "Fourniture PV",
 }
 
 
@@ -783,7 +785,7 @@ class RentalConsumptionManager:
     def unit(self, consumption_type: ConsumptionType) -> str:
         if consumption_type in (TYPE_WATER, TYPE_HOT_WATER):
             return UnitOfVolume.CUBIC_METERS
-        if consumption_type == TYPE_ELECTRICITY:
+        if consumption_type in (TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY):
             return UnitOfEnergy.KILO_WATT_HOUR
         heating_unit = str(self.entry.data[CONF_HEATING_UNIT])
         return "unités" if heating_unit == HEATING_UNIT_ALLOCATION else heating_unit
@@ -791,7 +793,7 @@ class RentalConsumptionManager:
     def unit_class(self, consumption_type: ConsumptionType) -> str | None:
         if consumption_type in (TYPE_WATER, TYPE_HOT_WATER):
             return VolumeConverter.UNIT_CLASS
-        if consumption_type == TYPE_ELECTRICITY:
+        if consumption_type in (TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY):
             return EnergyConverter.UNIT_CLASS
         if self.entry.data[CONF_HEATING_UNIT] == HEATING_UNIT_ALLOCATION:
             return None

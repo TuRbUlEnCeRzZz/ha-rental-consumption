@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.5.1."""
+"""Repository-level consistency tests for v1.5.2."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.5.1"
+    assert manifest["version"] == VERSION == "1.5.2"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -30,7 +30,8 @@ def test_victoriametrics_connection_test_checks_real_capabilities() -> None:
     exporter = (INTEGRATION / "exporter.py").read_text(encoding="utf-8")
     assert "_async_test_victoriametrics" in exporter
     assert "rental_consumption_connection_test" in exporter
-    assert '("match[]", selector)' in exporter
+    assert "/prometheus/api/v1/query" in exporter
+    assert '"query": selector' in exporter
     assert "read_deadline" in exporter
     assert 'await asyncio.sleep(0.25)' in exporter
     assert "_async_delete_vm_selectors([selector])" in exporter
@@ -122,3 +123,26 @@ def test_provider_default_has_v151_recovery_and_frontend_fallback() -> None:
     panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
     assert "recover the default provider" in manager
     assert "entry.providers?.[0]" in panel
+
+
+def test_pv_electricity_supply_is_first_class() -> None:
+    const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
+    manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")
+    sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
+    websocket = (INTEGRATION / "websocket.py").read_text(encoding="utf-8")
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    services = (INTEGRATION / "services.yaml").read_text(encoding="utf-8")
+    strings = json.loads((INTEGRATION / "strings.json").read_text(encoding="utf-8"))
+
+    assert 'TYPE_PV_ELECTRICITY: Final = "pv_electricity"' in const
+    assert 'TYPE_PV_ELECTRICITY: "Fourniture PV"' in manager
+    assert "TYPE_PV_ELECTRICITY" in sensor
+    assert "TYPE_PV_ELECTRICITY" in websocket
+    assert "pv_electricity" in panel
+    assert "Fourniture PV" in services
+    assert "pv_electricity_imported_total" in strings["entity"]["sensor"]
+
+
+def test_frontend_has_single_period_payload_declaration() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert panel.count("const payload = this._periodPayload(new FormData(event.currentTarget), edit);") == 1

@@ -36,6 +36,7 @@ from .const import (
     TYPE_ELECTRICITY,
     TYPE_HEATING,
     TYPE_HOT_WATER,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
     VERSION,
     ConsumptionType,
@@ -49,7 +50,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     manager: RentalConsumptionManager = hass.data[DOMAIN][entry.entry_id]
-    metric_types = (TYPE_WATER, TYPE_HOT_WATER, TYPE_HEATING, TYPE_ELECTRICITY)
+    metric_types = (TYPE_WATER, TYPE_HOT_WATER, TYPE_HEATING, TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY)
     async_add_entities(
         [RentalTotalSensor(manager, metric) for metric in metric_types]
         + [RentalLatestPeriodSensor(manager, metric) for metric in metric_types]
@@ -93,7 +94,7 @@ class RentalTotalSensor(RentalConsumptionBaseSensor):
         self._attr_suggested_display_precision = 3
         if consumption_type in (TYPE_WATER, TYPE_HOT_WATER):
             self._attr_device_class = SensorDeviceClass.WATER
-        elif consumption_type == TYPE_ELECTRICITY:
+        elif consumption_type in (TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY):
             self._attr_device_class = SensorDeviceClass.ENERGY
         elif manager.entry.data[CONF_HEATING_UNIT] != HEATING_UNIT_ALLOCATION:
             self._attr_device_class = SensorDeviceClass.ENERGY
@@ -263,4 +264,5 @@ class RentalPeriodCountSensor(RentalConsumptionBaseSensor):
             "hot_water_periods": self.manager.count(TYPE_HOT_WATER),
             "heating_periods": self.manager.count(TYPE_HEATING),
             "electricity_periods": self.manager.count(TYPE_ELECTRICITY),
+            "pv_electricity_periods": self.manager.count(TYPE_PV_ELECTRICITY),
         }

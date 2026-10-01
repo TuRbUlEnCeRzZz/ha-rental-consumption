@@ -62,6 +62,7 @@ from .const import (
     TYPE_ELECTRICITY,
     TYPE_HEATING,
     TYPE_HOT_WATER,
+    TYPE_PV_ELECTRICITY,
     TYPE_WATER,
     WS_ADD_PERIOD,
     WS_CREATE_APARTMENT,
@@ -179,6 +180,7 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
             TYPE_HOT_WATER: manager.unit(TYPE_HOT_WATER),
             TYPE_HEATING: manager.unit(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.unit(TYPE_ELECTRICITY),
+            TYPE_PV_ELECTRICITY: manager.unit(TYPE_PV_ELECTRICITY),
             "currency": manager.currency,
             "unit_prices": {
                 metric: f"{manager.currency}/{manager.unit(metric)}"
@@ -190,6 +192,7 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
             TYPE_HOT_WATER: manager.total(TYPE_HOT_WATER),
             TYPE_HEATING: manager.total(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.total(TYPE_ELECTRICITY),
+            TYPE_PV_ELECTRICITY: manager.total(TYPE_PV_ELECTRICITY),
         },
         "costs": costs,
         "counts": {
@@ -198,6 +201,7 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
             TYPE_HOT_WATER: manager.count(TYPE_HOT_WATER),
             TYPE_HEATING: manager.count(TYPE_HEATING),
             TYPE_ELECTRICITY: manager.count(TYPE_ELECTRICITY),
+            TYPE_PV_ELECTRICITY: manager.count(TYPE_PV_ELECTRICITY),
         },
         "statistics": {
             metric: manager.statistic_id(metric) for metric in CONSUMPTION_TYPES
