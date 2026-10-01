@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.4.0"
+VERSION: Final = "1.5.0"
 
 PLATFORMS: Final = ["sensor"]
 
@@ -24,12 +24,14 @@ WS_UPDATE_PERIOD: Final = f"{DOMAIN}/update_period"
 WS_DELETE_PERIOD: Final = f"{DOMAIN}/delete_period"
 WS_REBUILD_STATISTICS: Final = f"{DOMAIN}/rebuild_statistics"
 WS_UPDATE_SETTINGS: Final = f"{DOMAIN}/update_settings"
+WS_UPDATE_EXPORT_SETTINGS: Final = f"{DOMAIN}/update_export_settings"
 WS_TEST_EXPORT: Final = f"{DOMAIN}/test_export"
 WS_SYNC_EXPORT: Final = f"{DOMAIN}/sync_export"
 
 CONF_APARTMENT_NAME: Final = "apartment_name"
 CONF_HEATING_UNIT: Final = "heating_unit"
 CONF_GRID_OPERATOR: Final = "grid_operator"
+CONF_PROVIDER: Final = "provider"
 CONF_CURRENCY: Final = "currency"
 CONF_HEATING_DISTRIBUTION: Final = "heating_distribution"
 CONF_OUTDOOR_TEMPERATURE_SENSOR: Final = "outdoor_temperature_sensor"

@@ -37,6 +37,7 @@ class ConsumptionPeriod:
     value: float
     cost: float | None = None
     note: str = ""
+    provider: str = ""
     tariff_mode: str = TARIFF_SINGLE
     peak_value: float | None = None
     offpeak_value: float | None = None
@@ -79,6 +80,7 @@ class ConsumptionPeriod:
         note: str = "",
         cost: float | None = None,
         *,
+        provider: str = "",
         tariff_mode: str = TARIFF_SINGLE,
         peak_value: float | None = None,
         offpeak_value: float | None = None,
@@ -93,6 +95,7 @@ class ConsumptionPeriod:
             value=float(value),
             cost=None if cost is None else float(cost),
             note=note.strip(),
+            provider=provider.strip(),
             tariff_mode=tariff_mode,
             peak_value=_float_or_none(peak_value),
             offpeak_value=_float_or_none(offpeak_value),
@@ -109,6 +112,7 @@ class ConsumptionPeriod:
         value: float,
         note: str = "",
         cost: float | None = None,
+        provider: str | None = None,
         tariff_mode: str | None = None,
         peak_value: float | None = None,
         offpeak_value: float | None = None,
@@ -123,6 +127,7 @@ class ConsumptionPeriod:
             value=float(value),
             cost=None if cost is None else float(cost),
             note=note.strip(),
+            provider=self.provider if provider is None else provider.strip(),
             tariff_mode=tariff_mode or self.tariff_mode,
             peak_value=_float_or_none(peak_value),
             offpeak_value=_float_or_none(offpeak_value),
@@ -141,6 +146,7 @@ class ConsumptionPeriod:
             value=float(data["value"]),
             cost=None if raw_cost in (None, "") else float(raw_cost),
             note=str(data.get("note", "")),
+            provider=str(data.get("provider", "")).strip(),
             tariff_mode=str(data.get("tariff_mode", TARIFF_SINGLE)),
             peak_value=_float_or_none(data.get("peak_value")),
             offpeak_value=_float_or_none(data.get("offpeak_value")),

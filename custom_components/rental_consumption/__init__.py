@@ -25,6 +25,7 @@ from .const import (
     CONF_PEAK_COST,
     CONF_PEAK_VALUE,
     CONF_PERIOD_ID,
+    CONF_PROVIDER,
     CONF_START_DATE,
     CONF_TARIFF_MODE,
     CONF_VALUE,
@@ -78,6 +79,7 @@ REBUILD_SCHEMA = vol.Schema({vol.Required(CONF_ENTRY_ID): cv.string})
 def _period_kwargs(data: dict[str, Any], *, preserve: bool = False) -> dict[str, Any]:
     tariff_mode = data.get(CONF_TARIFF_MODE)
     return {
+        "provider": data.get(CONF_PROVIDER),
         "tariff_mode": (None if preserve else "single") if tariff_mode is None else str(tariff_mode),
         "peak_value": data.get(CONF_PEAK_VALUE),
         "offpeak_value": data.get(CONF_OFFPEAK_VALUE),

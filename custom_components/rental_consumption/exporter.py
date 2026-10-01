@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+import asyncio
 import json
 from typing import Any
+from uuid import uuid4
 from urllib.parse import urlencode
 
 from aiohttp import BasicAuth, ClientResponseError
@@ -24,6 +26,10 @@ from .models import ConsumptionPeriod, distribute_total, period_daily_cost_point
 
 class ExportError(RuntimeError):
     """Raised when an external export operation fails."""
+
+    def __init__(self, message: str, *, steps: dict[str, str] | None = None) -> None:
+        super().__init__(message)
+        self.steps = dict(steps or {})
 
 
 def _escape_tag(value: str) -> str:
@@ -103,6 +109,9 @@ class TimeSeriesExporter:
         return headers
 
     def _auth(self) -> BasicAuth | None:
+        # A configured bearer/API token takes precedence over Basic Auth.
+        if self.config.token:
+            return None
         if self.config.username:
             return BasicAuth(self.config.username, self.config.password or "")
         return None
@@ -111,16 +120,15 @@ class TimeSeriesExporter:
         return self.config.url.rstrip("/")
 
     async def async_test(self) -> dict[str, Any]:
-        """Test connectivity without touching user measurements."""
+        """Test the configured backend and return step-by-step feedback."""
         if not self.config.enabled:
             raise ExportError("export_not_configured")
+        if self.config.backend == EXPORT_VICTORIAMETRICS:
+            return await self._async_test_victoriametrics()
+
+        steps: dict[str, str] = {}
         backend = self.config.backend
         try:
-            if backend == EXPORT_VICTORIAMETRICS:
-                async with self.session.get(f"{self._base()}/health", headers=self._headers()) as response:
-                    if response.status >= 400:
-                        raise ExportError(f"http_{response.status}")
-                return {"ok": True, **self.capabilities}
             if backend == EXPORT_INFLUXDB_V1:
                 async with self.session.get(
                     f"{self._base()}/ping",
@@ -128,19 +136,102 @@ class TimeSeriesExporter:
                     auth=self._auth(),
                 ) as response:
                     if response.status >= 400:
-                        raise ExportError(f"http_{response.status}")
-                return {"ok": True, **self.capabilities}
+                        raise ExportError(f"http_{response.status}", steps=steps)
+                steps["health"] = "ok"
+                return {"ok": True, "steps": steps, **self.capabilities}
             if backend in (EXPORT_INFLUXDB_V2, EXPORT_INFLUXDB_V3):
-                path = "/health" if backend == EXPORT_INFLUXDB_V2 else "/health"
                 async with self.session.get(
-                    f"{self._base()}{path}", headers=self._headers()
+                    f"{self._base()}/health", headers=self._headers()
                 ) as response:
                     if response.status >= 400:
-                        raise ExportError(f"http_{response.status}")
-                return {"ok": True, **self.capabilities}
+                        raise ExportError(f"http_{response.status}", steps=steps)
+                steps["health"] = "ok"
+                return {"ok": True, "steps": steps, **self.capabilities}
+        except ExportError:
+            raise
         except (ClientResponseError, OSError) as err:
-            raise ExportError(str(err)) from err
-        raise ExportError("unsupported_backend")
+            raise ExportError(str(err), steps=steps) from err
+        raise ExportError("unsupported_backend", steps=steps)
+
+    async def _async_test_victoriametrics(self) -> dict[str, Any]:
+        """Verify VictoriaMetrics health, write, read and delete capabilities."""
+        steps: dict[str, str] = {}
+        test_id = uuid4().hex
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp())
+        tags = {
+            "integration": DOMAIN,
+            "source": "connection_test",
+            "entry_id": self.entry_id,
+            "test_id": test_id,
+        }
+        metric_name = "rental_consumption_connection_test_value"
+        selector = (
+            f'{{__name__="{metric_name}",integration="{DOMAIN}",'
+            f'source="connection_test",entry_id="{self.entry_id}",'
+            f'test_id="{test_id}"}}'
+        )
+        wrote_test_point = False
+        try:
+            async with self.session.get(
+                f"{self._base()}/health",
+                headers=self._headers(),
+                auth=self._auth(),
+            ) as response:
+                if response.status >= 400:
+                    message = (await response.text())[:300]
+                    raise ExportError(
+                        f"health_failed:{response.status}:{message}", steps=steps
+                    )
+            steps["health"] = "ok"
+
+            await self._async_write_lines(
+                [
+                    _line(
+                        "rental_consumption_connection_test",
+                        tags,
+                        "value",
+                        1.0,
+                        timestamp,
+                    )
+                ]
+            )
+            wrote_test_point = True
+            steps["write"] = "ok"
+
+            # Give the single-node query path a very short window to expose the point.
+            await asyncio.sleep(0.1)
+            params = {"match": selector}
+            async with self.session.get(
+                f"{self._base()}/api/v1/export",
+                params=params,
+                headers=self._headers(),
+                auth=self._auth(),
+            ) as response:
+                body = await response.text()
+                if response.status >= 400:
+                    raise ExportError(
+                        f"read_failed:{response.status}:{body[:300]}", steps=steps
+                    )
+                if test_id not in body:
+                    raise ExportError("read_failed:test_point_not_found", steps=steps)
+            steps["read"] = "ok"
+
+            await self._async_delete_vm_selectors([selector])
+            wrote_test_point = False
+            steps["delete"] = "ok"
+            return {"ok": True, "steps": steps, **self.capabilities}
+        except ExportError as err:
+            if not err.steps:
+                err.steps = dict(steps)
+            raise
+        except (ClientResponseError, OSError) as err:
+            raise ExportError(str(err), steps=steps) from err
+        finally:
+            if wrote_test_point:
+                try:
+                    await self._async_delete_vm_selectors([selector])
+                except Exception:  # Best-effort cleanup must not hide the test error.
+                    pass
 
     async def async_write_period(
         self,
@@ -160,6 +251,8 @@ class TimeSeriesExporter:
             "unit": unit,
             "tariff_mode": period.tariff_mode,
         }
+        if period.provider:
+            base_tags["provider"] = period.provider
         for day, value in period_daily_points(period, weights):
             ts = int(
                 datetime.combine(day, time(hour=12), tzinfo=timezone.utc).timestamp()
@@ -250,6 +343,25 @@ class TimeSeriesExporter:
         except OSError as err:
             raise ExportError(str(err)) from err
 
+    async def _async_delete_vm_selectors(self, selectors: list[str]) -> None:
+        """Delete only explicit VictoriaMetrics selectors owned by the integration."""
+        params: dict[str, str] = {}
+        if self.config.delete_auth_key:
+            params["authKey"] = self.config.delete_auth_key
+        payload: list[tuple[str, str]] = [("match[]", item) for item in selectors]
+        headers = self._headers()
+        headers.pop("Content-Type", None)
+        async with self.session.post(
+            f"{self._base()}/api/v1/admin/tsdb/delete_series",
+            params=params,
+            data=payload,
+            headers=headers,
+            auth=self._auth(),
+        ) as response:
+            if response.status >= 300:
+                message = (await response.text())[:300]
+                raise ExportError(f"delete_failed:{response.status}:{message}")
+
     async def _async_delete(self, tags: dict[str, str]) -> None:
         backend = self.config.backend
         if backend == EXPORT_VICTORIAMETRICS:
@@ -264,16 +376,7 @@ class TimeSeriesExporter:
                     + [f'{key}="{value}"' for key, value in tags.items()]
                 )
                 selectors.append(f"{{{labels}}}")
-            payload: list[tuple[str, str]] = [("match[]", item) for item in selectors]
-            if self.config.delete_auth_key:
-                payload.append(("authKey", self.config.delete_auth_key))
-            async with self.session.post(
-                f"{self._base()}/api/v1/admin/tsdb/delete_series",
-                data=payload,
-                headers=self._headers(),
-            ) as response:
-                if response.status >= 300:
-                    raise ExportError(f"delete_failed:{response.status}")
+            await self._async_delete_vm_selectors(selectors)
             return
 
         if backend == EXPORT_INFLUXDB_V1:

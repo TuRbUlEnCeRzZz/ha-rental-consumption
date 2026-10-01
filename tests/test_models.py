@@ -1,4 +1,4 @@
-"""Pure unit tests for Rental Consumption v1.4 calculations."""
+"""Pure unit tests for Rental Consumption v1.5 calculations."""
 
 from datetime import date
 
@@ -121,3 +121,60 @@ def test_negative_cost_is_rejected() -> None:
 
 def test_temperature_allocation_has_negative_correlation() -> None:
     assert pearson_correlation([10,5,0],[10,20,30]) == pytest.approx(-1)
+
+
+def test_provider_round_trip_and_backwards_compatibility() -> None:
+    old = ConsumptionPeriod.from_dict({
+        "period_id": "old-provider",
+        "consumption_type": TYPE_ELECTRICITY,
+        "start_date": "2026-05-01",
+        "end_date": "2026-05-31",
+        "value": 200,
+    })
+    assert old.provider == ""
+
+    period = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY,
+        date(2026, 5, 1),
+        date(2026, 5, 31),
+        200,
+        provider="Groupe E",
+    )
+    restored = ConsumptionPeriod.from_dict(period.to_dict())
+    assert restored.provider == "Groupe E"
+
+
+def test_period_update_preserves_provider_when_not_supplied() -> None:
+    period = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY,
+        date(2026, 5, 1),
+        date(2026, 5, 31),
+        200,
+        provider="Groupe E",
+    )
+    updated = period.updated(
+        consumption_type=TYPE_ELECTRICITY,
+        start_date=period.start_date,
+        end_date=period.end_date,
+        value=210,
+        provider=None,
+    )
+    assert updated.provider == "Groupe E"
+
+
+def test_period_update_can_change_provider() -> None:
+    period = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY,
+        date(2026, 5, 1),
+        date(2026, 5, 31),
+        200,
+        provider="Groupe E",
+    )
+    updated = period.updated(
+        consumption_type=TYPE_ELECTRICITY,
+        start_date=period.start_date,
+        end_date=period.end_date,
+        value=200,
+        provider="Nouveau fournisseur",
+    )
+    assert updated.provider == "Nouveau fournisseur"

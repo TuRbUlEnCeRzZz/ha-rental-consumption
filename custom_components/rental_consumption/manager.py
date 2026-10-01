@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, time, timedelta, timezone
 import logging
@@ -128,6 +129,7 @@ class RentalConsumptionManager:
             "status": "never",
             "message": None,
             "at": None,
+            "steps": {},
         }
 
     @classmethod
@@ -167,14 +169,31 @@ class RentalConsumptionManager:
         return dict(self._last_export_status)
 
     async def async_load(self) -> None:
+        """Load stored periods and perform the v1.5 provider migration."""
         raw = await self._store.async_load() or {}
         loaded: list[ConsumptionPeriod] = []
+        migrated = False
+        default_provider = self.grid_operator.strip()
         for item in raw.get("periods", []):
             try:
-                loaded.append(ConsumptionPeriod.from_dict(item))
+                period = ConsumptionPeriod.from_dict(item)
+                if not period.provider and default_provider:
+                    period = replace(period, provider=default_provider)
+                    migrated = True
+                loaded.append(period)
             except (KeyError, TypeError, ValueError):
                 _LOGGER.warning("Ignoring an invalid stored consumption period: %s", item)
         self._periods = loaded
+        stored_status = raw.get("export_status")
+        if isinstance(stored_status, dict):
+            self._last_export_status = {
+                "status": str(stored_status.get("status", "never")),
+                "message": stored_status.get("message"),
+                "at": stored_status.get("at"),
+                "steps": dict(stored_status.get("steps", {})),
+            }
+        if migrated:
+            await self._async_save()
 
     async def async_add_period(
         self,
@@ -185,6 +204,7 @@ class RentalConsumptionManager:
         note: str = "",
         cost: float | None = None,
         *,
+        provider: str | None = None,
         tariff_mode: str = "single",
         peak_value: float | None = None,
         offpeak_value: float | None = None,
@@ -198,6 +218,7 @@ class RentalConsumptionManager:
             value,
             note,
             cost,
+            provider=(self.grid_operator if provider is None else provider),
             tariff_mode=tariff_mode,
             peak_value=peak_value,
             offpeak_value=offpeak_value,
@@ -223,6 +244,7 @@ class RentalConsumptionManager:
         note: str = "",
         cost: float | None = None,
         *,
+        provider: str | None = None,
         tariff_mode: str | None = None,
         peak_value: float | None = None,
         offpeak_value: float | None = None,
@@ -244,6 +266,7 @@ class RentalConsumptionManager:
                 value=value,
                 note=note,
                 cost=cost,
+                provider=provider,
                 tariff_mode=tariff_mode,
                 peak_value=original.peak_value if preserve_tariff_details else peak_value,
                 offpeak_value=original.offpeak_value if preserve_tariff_details else offpeak_value,
@@ -354,7 +377,13 @@ class RentalConsumptionManager:
         export_password: str | None = None,
         export_token: str | None = None,
         export_delete_auth_key: str | None = None,
-    ) -> None:
+    ) -> dict[str, bool]:
+        """Update settings and rebuild Recorder only when statistical inputs changed.
+
+        v1.5 deliberately decouples administrative/export settings from Recorder.
+        Changing the default provider or database credentials must never rebuild
+        historical statistics.
+        """
         if heating_distribution not in (
             DISTRIBUTION_UNIFORM_DAILY,
             DISTRIBUTION_OUTDOOR_TEMPERATURE,
@@ -369,40 +398,144 @@ class RentalConsumptionManager:
             raise PeriodValidationError("temperature_sensor_required")
 
         current = dict(self.entry.data)
-        previous_backend = str(current.get(CONF_EXPORT_BACKEND, EXPORT_NONE))
+        normalized_currency = currency.strip().upper() or DEFAULT_CURRENCY
+        statistical_before = {
+            CONF_CURRENCY: self.currency,
+            CONF_HEATING_DISTRIBUTION: self.heating_distribution,
+            CONF_OUTDOOR_TEMPERATURE_SENSOR: self.outdoor_temperature_sensor,
+            CONF_HEATING_BASE_TEMPERATURE: self.heating_base_temperature,
+            CONF_ELECTRICITY_DISTRIBUTION: self.electricity_distribution,
+            CONF_ELECTRICITY_LOAD_SENSOR: self.electricity_load_sensor,
+            CONF_LOAD_CURVE_SOURCE: self.load_curve_source,
+            CONF_LOAD_CURVE_MIN_COVERAGE: self.load_curve_min_coverage,
+            CONF_VM_LOAD_METRIC: self.vm_load_metric,
+            CONF_VM_LOAD_DB_LABEL: self.vm_load_db_label,
+        }
+
         updates: dict[str, Any] = {
             CONF_GRID_OPERATOR: grid_operator.strip(),
-            CONF_CURRENCY: currency.strip().upper() or DEFAULT_CURRENCY,
+            CONF_CURRENCY: normalized_currency,
             CONF_HEATING_DISTRIBUTION: heating_distribution,
             CONF_OUTDOOR_TEMPERATURE_SENSOR: outdoor_temperature_sensor.strip(),
             CONF_HEATING_BASE_TEMPERATURE: float(heating_base_temperature),
         }
-        optional = {
+        statistical_optional = {
             CONF_ELECTRICITY_DISTRIBUTION: electricity_distribution,
             CONF_ELECTRICITY_LOAD_SENSOR: electricity_load_sensor,
             CONF_LOAD_CURVE_SOURCE: load_curve_source,
             CONF_LOAD_CURVE_MIN_COVERAGE: load_curve_min_coverage,
             CONF_VM_LOAD_METRIC: vm_load_metric,
             CONF_VM_LOAD_DB_LABEL: vm_load_db_label,
-            CONF_EXPORT_BACKEND: export_backend,
-            CONF_EXPORT_URL: export_url,
-            CONF_EXPORT_AUTO_SYNC: export_auto_sync,
-            CONF_EXPORT_DATABASE: export_database,
-            CONF_EXPORT_RETENTION_POLICY: export_retention_policy,
-            CONF_EXPORT_ORG: export_org,
-            CONF_EXPORT_BUCKET: export_bucket,
-            CONF_EXPORT_USERNAME: export_username,
-            CONF_EXPORT_PASSWORD: export_password,
-            CONF_EXPORT_TOKEN: export_token,
-            CONF_EXPORT_DELETE_AUTH_KEY: export_delete_auth_key,
         }
-        for key, value in optional.items():
+        for key, value in statistical_optional.items():
+            if value is not None:
+                updates[key] = value.strip() if isinstance(value, str) else value
+
+        current.update(updates)
+        self.hass.config_entries.async_update_entry(self.entry, data=current)
+
+        statistical_after = {
+            CONF_CURRENCY: normalized_currency,
+            CONF_HEATING_DISTRIBUTION: heating_distribution,
+            CONF_OUTDOOR_TEMPERATURE_SENSOR: outdoor_temperature_sensor.strip(),
+            CONF_HEATING_BASE_TEMPERATURE: float(heating_base_temperature),
+            CONF_ELECTRICITY_DISTRIBUTION: str(
+                updates.get(CONF_ELECTRICITY_DISTRIBUTION, statistical_before[CONF_ELECTRICITY_DISTRIBUTION])
+            ),
+            CONF_ELECTRICITY_LOAD_SENSOR: str(
+                updates.get(CONF_ELECTRICITY_LOAD_SENSOR, statistical_before[CONF_ELECTRICITY_LOAD_SENSOR])
+            ),
+            CONF_LOAD_CURVE_SOURCE: str(
+                updates.get(CONF_LOAD_CURVE_SOURCE, statistical_before[CONF_LOAD_CURVE_SOURCE])
+            ),
+            CONF_LOAD_CURVE_MIN_COVERAGE: float(
+                updates.get(CONF_LOAD_CURVE_MIN_COVERAGE, statistical_before[CONF_LOAD_CURVE_MIN_COVERAGE])
+            ),
+            CONF_VM_LOAD_METRIC: str(
+                updates.get(CONF_VM_LOAD_METRIC, statistical_before[CONF_VM_LOAD_METRIC])
+            ),
+            CONF_VM_LOAD_DB_LABEL: str(
+                updates.get(CONF_VM_LOAD_DB_LABEL, statistical_before[CONF_VM_LOAD_DB_LABEL])
+            ),
+        }
+        recorder_rebuilt = statistical_after != statistical_before
+        if recorder_rebuilt:
+            await self.async_rebuild_statistics()
+
+        # Export settings are saved separately so connection tests never depend on
+        # a Recorder rebuild. Accepting them here keeps backward compatibility
+        # with the v1.4 frontend and services.
+        if any(
+            value is not None
+            for value in (
+                export_backend,
+                export_url,
+                export_auto_sync,
+                export_database,
+                export_retention_policy,
+                export_org,
+                export_bucket,
+                export_username,
+                export_password,
+                export_token,
+                export_delete_auth_key,
+            )
+        ):
+            await self.async_update_export_settings(
+                backend=export_backend,
+                url=export_url,
+                auto_sync=export_auto_sync,
+                database=export_database,
+                retention_policy=export_retention_policy,
+                org=export_org,
+                bucket=export_bucket,
+                username=export_username,
+                password=export_password,
+                token=export_token,
+                delete_auth_key=export_delete_auth_key,
+            )
+
+        return {"recorder_rebuilt": recorder_rebuilt}
+
+    async def async_update_export_settings(
+        self,
+        *,
+        backend: str | None = None,
+        url: str | None = None,
+        auto_sync: bool | None = None,
+        database: str | None = None,
+        retention_policy: str | None = None,
+        org: str | None = None,
+        bucket: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        token: str | None = None,
+        delete_auth_key: str | None = None,
+    ) -> None:
+        """Save external database settings without touching Recorder."""
+        current = dict(self.entry.data)
+        previous_backend = str(current.get(CONF_EXPORT_BACKEND, EXPORT_NONE))
+        updates: dict[str, Any] = {}
+        values = {
+            CONF_EXPORT_BACKEND: backend,
+            CONF_EXPORT_URL: url,
+            CONF_EXPORT_AUTO_SYNC: auto_sync,
+            CONF_EXPORT_DATABASE: database,
+            CONF_EXPORT_RETENTION_POLICY: retention_policy,
+            CONF_EXPORT_ORG: org,
+            CONF_EXPORT_BUCKET: bucket,
+            CONF_EXPORT_USERNAME: username,
+            CONF_EXPORT_PASSWORD: password,
+            CONF_EXPORT_TOKEN: token,
+            CONF_EXPORT_DELETE_AUTH_KEY: delete_auth_key,
+        }
+        for key, value in values.items():
             if value is not None:
                 updates[key] = value.strip() if isinstance(value, str) else value
 
         target_backend = str(updates.get(CONF_EXPORT_BACKEND, previous_backend))
         if target_backend != previous_backend:
-            # Never silently reuse credentials from a different backend.
+            # Never reuse credentials silently when switching backend families.
             for secret_key in (
                 CONF_EXPORT_PASSWORD,
                 CONF_EXPORT_TOKEN,
@@ -413,19 +546,18 @@ class RentalConsumptionManager:
             if CONF_EXPORT_USERNAME not in updates:
                 updates[CONF_EXPORT_USERNAME] = ""
 
-        # Generic InfluxDB 3 write support is intentionally append/update only.
-        # Disable auto-sync because deletions and safe full rebuilds are not portable
-        # across InfluxDB 3 deployments.
         if target_backend == "influxdb_v3" and updates.get(CONF_EXPORT_AUTO_SYNC):
             updates[CONF_EXPORT_AUTO_SYNC] = False
 
         current.update(updates)
         self.hass.config_entries.async_update_entry(self.entry, data=current)
-        await self.async_rebuild_statistics()
 
     async def _async_save(self) -> None:
         await self._store.async_save(
-            {"periods": [period.to_dict() for period in self.periods]}
+            {
+                "periods": [period.to_dict() for period in self.periods],
+                "export_status": self._last_export_status,
+            }
         )
 
     def setting(self, key: str, default: Any = None) -> Any:
@@ -523,21 +655,38 @@ class RentalConsumptionManager:
     def _exporter(self) -> TimeSeriesExporter:
         return TimeSeriesExporter(self.hass, self.export_config, self.entry.entry_id)
 
-    def _set_export_status(self, status: str, message: str | None) -> None:
+    def _set_export_status(
+        self,
+        status: str,
+        message: str | None,
+        steps: Mapping[str, str] | None = None,
+    ) -> None:
         self._last_export_status = {
             "status": status,
             "message": message,
             "at": dt_util.now().isoformat(),
+            "steps": dict(steps or {}),
         }
 
     async def async_test_export(self) -> dict[str, Any]:
-        try:
-            result = await self._exporter().async_test()
-            self._set_export_status("ok", "connection_test")
-            return result
-        except ExportError as err:
-            self._set_export_status("error", str(err))
-            raise
+        """Run a real backend test and persist visible feedback."""
+        async with self._lock:
+            self._set_export_status("testing", "connection_test_started")
+            await self._async_save()
+            try:
+                result = await self._exporter().async_test()
+                self._set_export_status(
+                    "ok",
+                    "connection_test",
+                    result.get("steps") if isinstance(result, dict) else None,
+                )
+                await self._async_save()
+                return result
+            except ExportError as err:
+                steps = getattr(err, "steps", None)
+                self._set_export_status("error", str(err), steps)
+                await self._async_save()
+                raise
 
     async def async_sync_export(self) -> dict[str, Any]:
         exporter = self._exporter()
@@ -560,7 +709,8 @@ class RentalConsumptionManager:
                     period, self.unit(period.consumption_type), self.currency, weights
                 )
                 count += 1
-            self._set_export_status("ok", f"full_sync:{count}")
+            self._set_export_status("ok", f"full_sync:{count}", {"rebuild": "ok"})
+            await self._async_save()
             return {"ok": True, "periods": count, **exporter.capabilities}
 
     def total(self, consumption_type: ConsumptionType) -> float:

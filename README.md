@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics.
 
 ## Highlights
 
@@ -21,11 +21,14 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - configurable minimum load-curve coverage;
 - optional historical export to VictoriaMetrics or InfluxDB;
 - native Home Assistant theme variables in the sidebar panel;
-- one responsive history layout for desktop and mobile.
+- one responsive history layout for desktop and mobile;
+- DSO / supplier stored per billing period and filterable in history;
+- four persistent internal tabs: Overview, Periods, Analysis and Settings;
+- inline VictoriaMetrics connection diagnostics with health/write/read/delete feedback.
 
 ## Compatibility
 
-- Home Assistant Core **2026.7.4 or newer**;
+- Home Assistant Core **2026.9.4 or newer**;
 - tested against the current Home Assistant OS/Core release during development;
 - Home Assistant OS on Raspberry Pi 4 remains the primary target;
 - HACS custom repository installation;
@@ -39,6 +42,41 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 4. Restart Home Assistant.
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
+
+
+## What changed in v1.5.0
+
+### Supplier history
+
+The global DSO / supplier setting is now a **default value**. Each billing period stores its own `provider`, so supplier changes over time remain historically correct. Existing v1.4 periods without a provider are migrated once using the current default supplier.
+
+The Periods tab adds a supplier filter alongside type and year. New and edited periods expose their own DSO / supplier field.
+
+### Settings no longer rebuild Recorder unnecessarily
+
+Administrative settings and external database credentials are now decoupled from Recorder. Changing the default supplier, VictoriaMetrics URL, token, database or `deleteAuthKey` does not rebuild statistics. Recorder is rebuilt only when a setting that changes historical statistics is modified.
+
+### VictoriaMetrics connection diagnostics
+
+The VictoriaMetrics test now validates the complete path with a temporary integration-owned series:
+
+1. server health;
+2. write;
+3. read-back;
+4. delete.
+
+The result is shown directly in the Settings tab and the tab stays open during the operation. The last test result is persisted in the integration store.
+
+### Navigation
+
+The sidebar is split into four internal tabs:
+
+- **Overview**;
+- **Periods**;
+- **Analysis**;
+- **Settings**.
+
+These are client-side tabs inside the existing Home Assistant panel, so the panel continues to inherit the active Home Assistant theme.
 
 ## Electricity billing
 
@@ -76,7 +114,7 @@ The integration stores the exact billing split. It does **not** invent a peak/of
 
 ## Electricity load-curve allocation
 
-Uniform allocation remains available, but v1.4.0 adds a second mode:
+Uniform allocation remains available; v1.4.0 introduced the second mode:
 
 ```text
 Electricity distribution
@@ -170,7 +208,7 @@ Billing periods remain the source of truth. Recorder statistics can be completel
 
 ## External time-series export
 
-v1.4.0 can optionally write the reconstructed daily billing history to a separate time-series database.
+The integration can optionally write reconstructed daily billing history to a separate time-series database. In v1.5.0, database settings are saved independently from Recorder rebuilds.
 
 The exported measurements are intentionally separated from physical meter measurements:
 
@@ -232,7 +270,7 @@ Supported:
 
 Supported for writing through `/api/v3/write_lp`.
 
-InfluxDB 3 deployments do not all expose the same safe row-deletion capability. For that reason, v1.4.0 deliberately treats generic InfluxDB 3 as **write-compatible but not safe-rebuild capable**.
+InfluxDB 3 deployments do not all expose the same safe row-deletion capability. For that reason, v1.5.0 deliberately treats generic InfluxDB 3 as **write-compatible but not safe-rebuild capable**.
 
 Consequences:
 
@@ -276,7 +314,7 @@ Each period shows:
 - coverage;
 - edit/delete actions.
 
-Filters are available by consumption type and year.
+Filters are available by consumption type, year and DSO / supplier.
 
 ## Available actions
 
@@ -318,9 +356,9 @@ data:
   offpeak_cost: 65
 ```
 
-## Updating from v1.3.x
+## Updating from v1.4.x
 
-Existing periods remain compatible.
+Existing periods remain compatible. Periods that do not yet contain a supplier are migrated once using the configured default DSO / supplier.
 
 Older electricity periods automatically behave as:
 

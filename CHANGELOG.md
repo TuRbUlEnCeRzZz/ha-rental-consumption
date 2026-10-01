@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.0 — 2026-10-01
+
+- Added DSO / supplier as a property of each billing period.
+- Added one-time migration of older periods to the configured default supplier.
+- Added supplier field to add/edit period workflows and service calls.
+- Added supplier filtering to history.
+- Reorganized the sidebar into Overview, Periods, Analysis and Settings tabs.
+- Fixed settings persistence so provider and database settings no longer trigger unnecessary Recorder rebuilds.
+- Added a dedicated `rental_consumption/update_export_settings` WebSocket command.
+- Fixed VictoriaMetrics settings persistence independently from Recorder.
+- Fixed the connection-test UX so the Settings tab remains open and feedback is shown inline.
+- Expanded the VictoriaMetrics test to health, write, read-back and delete stages using a temporary integration-owned series.
+- Persisted the last external database test status and step results.
+- Fixed VictoriaMetrics `deleteAuthKey` handling as a query parameter and kept form encoding for `match[]`.
+- Added backend-specific settings visibility so irrelevant InfluxDB fields are hidden for VictoriaMetrics.
+- Added provider tags to external exported billing series.
+- Raised the HACS Home Assistant minimum to 2026.9.4, the current stable Core release at development time.
+
 ## 1.4.0 — 2026-09-30
 
 - Added electricity distribution based on the measured incoming load curve.

@@ -41,6 +41,7 @@ from .const import (
     CONF_PEAK_COST,
     CONF_PEAK_VALUE,
     CONF_PERIOD_ID,
+    CONF_PROVIDER,
     CONF_START_DATE,
     CONF_TARIFF_MODE,
     CONF_VALUE,
@@ -64,6 +65,7 @@ from .const import (
     WS_TEST_EXPORT,
     WS_UPDATE_PERIOD,
     WS_UPDATE_SETTINGS,
+    WS_UPDATE_EXPORT_SETTINGS,
 )
 from .exporter import ExportError
 from .manager import RentalConsumptionManager
@@ -82,6 +84,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         websocket_delete_period,
         websocket_rebuild_statistics,
         websocket_update_settings,
+        websocket_update_export_settings,
         websocket_test_export,
         websocket_sync_export,
     ):
@@ -108,6 +111,7 @@ def _serialize_period(
         "days": period.days,
         "daily_average": period.daily_average,
         "note": period.note,
+        "provider": period.provider,
         "tariff_mode": period.tariff_mode,
         "peak_value": period.peak_value,
         "offpeak_value": period.offpeak_value,
@@ -188,6 +192,7 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
         },
         "heating_analysis": manager.heating_analysis,
         "electricity_analysis": manager.electricity_analysis,
+        "providers": sorted({period.provider for period in periods if period.provider}),
         "periods": [_serialize_period(manager, period) for period in periods],
     }
 
@@ -222,6 +227,7 @@ _PERIOD_SCHEMA = {
     vol.Required(CONF_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0.001)),
     vol.Optional(CONF_COST): vol.All(vol.Coerce(float), vol.Range(min=0)),
     vol.Optional(CONF_NOTE, default=""): cv.string,
+    vol.Optional(CONF_PROVIDER): cv.string,
     vol.Optional(CONF_TARIFF_MODE): vol.In(TARIFF_MODES),
     vol.Optional(CONF_PEAK_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0)),
     vol.Optional(CONF_OFFPEAK_VALUE): vol.All(vol.Coerce(float), vol.Range(min=0)),
@@ -259,6 +265,7 @@ async def websocket_add_period(hass, connection, msg) -> None:
             float(msg[CONF_VALUE]),
             str(msg.get(CONF_NOTE, "")),
             None if CONF_COST not in msg else float(msg[CONF_COST]),
+            provider=msg.get(CONF_PROVIDER),
             **_period_kwargs(msg),
         )
     except PeriodValidationError as err:
@@ -291,6 +298,7 @@ async def websocket_update_period(hass, connection, msg) -> None:
             float(msg[CONF_VALUE]),
             str(msg.get(CONF_NOTE, "")),
             None if CONF_COST not in msg else float(msg[CONF_COST]),
+            provider=msg.get(CONF_PROVIDER),
             **_period_kwargs(msg, preserve=True),
         )
     except PeriodValidationError as err:
@@ -406,6 +414,48 @@ async def websocket_update_settings(hass, connection, msg) -> None:
     except PeriodValidationError as err:
         connection.send_error(msg["id"], err.code, err.code)
         return
+    connection.send_result(msg["id"], _serialize_manager(manager))
+
+
+_EXPORT_SETTINGS_SCHEMA = {
+    vol.Required("type"): WS_UPDATE_EXPORT_SETTINGS,
+    vol.Required(CONF_ENTRY_ID): cv.string,
+    vol.Optional(CONF_EXPORT_BACKEND): vol.In(EXPORT_BACKENDS),
+    vol.Optional(CONF_EXPORT_URL): cv.string,
+    vol.Optional(CONF_EXPORT_AUTO_SYNC): cv.boolean,
+    vol.Optional(CONF_EXPORT_DATABASE): cv.string,
+    vol.Optional(CONF_EXPORT_RETENTION_POLICY): cv.string,
+    vol.Optional(CONF_EXPORT_ORG): cv.string,
+    vol.Optional(CONF_EXPORT_BUCKET): cv.string,
+    vol.Optional(CONF_EXPORT_USERNAME): cv.string,
+    vol.Optional(CONF_EXPORT_PASSWORD): cv.string,
+    vol.Optional(CONF_EXPORT_TOKEN): cv.string,
+    vol.Optional(CONF_EXPORT_DELETE_AUTH_KEY): cv.string,
+}
+
+
+@websocket_api.websocket_command(_EXPORT_SETTINGS_SCHEMA)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_update_export_settings(hass, connection, msg) -> None:
+    """Save database credentials/settings without rebuilding Recorder."""
+    manager = _manager(hass, msg[CONF_ENTRY_ID])
+    if manager is None:
+        connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
+        return
+    await manager.async_update_export_settings(
+        backend=msg.get(CONF_EXPORT_BACKEND),
+        url=msg.get(CONF_EXPORT_URL),
+        auto_sync=msg.get(CONF_EXPORT_AUTO_SYNC),
+        database=msg.get(CONF_EXPORT_DATABASE),
+        retention_policy=msg.get(CONF_EXPORT_RETENTION_POLICY),
+        org=msg.get(CONF_EXPORT_ORG),
+        bucket=msg.get(CONF_EXPORT_BUCKET),
+        username=msg.get(CONF_EXPORT_USERNAME),
+        password=msg.get(CONF_EXPORT_PASSWORD),
+        token=msg.get(CONF_EXPORT_TOKEN),
+        delete_auth_key=msg.get(CONF_EXPORT_DELETE_AUTH_KEY),
+    )
     connection.send_result(msg["id"], _serialize_manager(manager))
 
 

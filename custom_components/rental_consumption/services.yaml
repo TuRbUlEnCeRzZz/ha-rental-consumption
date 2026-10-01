@@ -26,6 +26,11 @@ add_period:
       name: Coût total
       required: false
       selector: {number: {min: 0, max: 1000000000, step: any, mode: box}}
+    provider:
+      name: GRD / fournisseur
+      description: Fournisseur ou gestionnaire de réseau associé à cette période.
+      required: false
+      selector: {text: {}}
     tariff_mode:
       name: Tarif électrique
       required: false
@@ -75,6 +80,7 @@ update_period:
     end_date: {name: Fin, required: true, selector: {date: {}}}
     value: {name: Consommation totale, required: true, selector: {number: {min: 0.001, max: 1000000000, step: any, mode: box}}}
     cost: {name: Coût total, required: false, selector: {number: {min: 0, max: 1000000000, step: any, mode: box}}}
+    provider: {name: GRD / fournisseur, required: false, selector: {text: {}}}
     tariff_mode:
       name: Tarif électrique
       required: false
