@@ -12,6 +12,7 @@ class RentalConsumptionPanel extends HTMLElement {
     this._historyProvider = "all";
     this._busyAction = null;
     this._message = null;
+    this._apartmentDialog = null;
   }
 
   set hass(hass) {
@@ -30,7 +31,16 @@ class RentalConsumptionPanel extends HTMLElement {
         title: "Consommation locative",
         subtitle: "Décomptes historiques, répartition Recorder et export time-series.",
         refresh: "Actualiser",
-        apartment: "Appartement",
+        apartment: "Logement",
+        addApartment: "Ajouter un logement",
+        editApartment: "Modifier le logement",
+        apartmentName: "Nom du logement",
+        heatingUnit: "Unité du chauffage",
+        createApartment: "Créer le logement",
+        renameApartment: "Renommer",
+        apartmentCreated: "Logement ajouté.",
+        apartmentRenamed: "Logement renommé.",
+        apartmentHelp: "Chaque logement possède ses propres périodes, statistiques Recorder et paramètres d’export.",
         overview: "Vue d’ensemble",
         periods: "Périodes",
         analysis: "Analyse",
@@ -149,7 +159,16 @@ class RentalConsumptionPanel extends HTMLElement {
         title: "Rental consumption",
         subtitle: "Historical bills, Recorder allocation and time-series export.",
         refresh: "Refresh",
-        apartment: "Apartment",
+        apartment: "Dwelling",
+        addApartment: "Add dwelling",
+        editApartment: "Edit dwelling",
+        apartmentName: "Dwelling name",
+        heatingUnit: "Heating unit",
+        createApartment: "Create dwelling",
+        renameApartment: "Rename",
+        apartmentCreated: "Dwelling added.",
+        apartmentRenamed: "Dwelling renamed.",
+        apartmentHelp: "Each dwelling has its own billing periods, Recorder statistics and export settings.",
         overview: "Overview",
         periods: "Periods",
         analysis: "Analysis",
@@ -343,15 +362,49 @@ class RentalConsumptionPanel extends HTMLElement {
         </header>
         ${this._message ? `<div class="message ${this._message.kind}">${this._escape(this._message.text)}</div>` : ""}
         <section class="card picker-card">
-          <label><span>${this._t("apartment")}</span><select id="entry-select">${this._data.entries.map((item) => `<option value="${item.entry_id}" ${item.entry_id === entry.entry_id ? "selected" : ""}>${this._escape(item.title)}</option>`).join("")}</select></label>
+          <div class="picker-row">
+            <label><span>${this._t("apartment")}</span><select id="entry-select">${this._data.entries.map((item) => `<option value="${item.entry_id}" ${item.entry_id === entry.entry_id ? "selected" : ""}>${this._escape(item.title)}</option>`).join("")}</select></label>
+            <div class="apartment-actions">
+              <button class="button" data-action="add-apartment" ${this._busyAction ? "disabled" : ""}>＋ ${this._t("addApartment")}</button>
+              <button class="button" data-action="edit-apartment" ${this._busyAction ? "disabled" : ""}>✎ ${this._t("editApartment")}</button>
+            </div>
+          </div>
+          <small class="picker-help">${this._t("apartmentHelp")}</small>
         </section>
         ${this._tabs()}
         ${this._activeTab === "overview" ? this._overview(entry) : ""}
         ${this._activeTab === "periods" ? this._periodsTab(entry) : ""}
         ${this._activeTab === "analysis" ? this._analysisTab(entry) : ""}
         ${this._activeTab === "settings" ? this._settingsTab(entry) : ""}
+        ${this._apartmentDialog ? this._apartmentDialogMarkup(entry) : ""}
       </main>`;
     this._bind();
+  }
+
+  _apartmentDialogMarkup(entry) {
+    const addMode = this._apartmentDialog === "add";
+    const settings = entry.settings || {};
+    return `
+      <div class="modal-backdrop" data-action="close-apartment-dialog">
+        <section class="modal-card" role="dialog" aria-modal="true" aria-label="${this._escape(this._t(addMode ? "addApartment" : "editApartment"))}" data-modal-card>
+          <div class="section-header">
+            <h2>${this._t(addMode ? "addApartment" : "editApartment")}</h2>
+            <button type="button" class="icon-button" data-action="close-apartment-dialog" aria-label="${this._t("cancel")}">×</button>
+          </div>
+          <form id="apartment-form">
+            <div class="form-grid">
+              ${this._field(this._t("apartmentName"), `<input name="apartment_name" required value="${addMode ? "" : this._escape(entry.title)}" autofocus>`)}
+              ${addMode ? this._field(this._t("heatingUnit"), `<select name="heating_unit"><option value="kWh" ${settings.heating_unit === "kWh" ? "selected" : ""}>kWh</option><option value="MWh" ${settings.heating_unit === "MWh" ? "selected" : ""}>MWh</option><option value="GJ" ${settings.heating_unit === "GJ" ? "selected" : ""}>GJ</option><option value="allocation_units" ${settings.heating_unit === "allocation_units" ? "selected" : ""}>Unités de répartition</option></select>`) : ""}
+              ${addMode ? this._field(this._t("providerDefault"), `<input name="grid_operator" value="${this._escape(settings.grid_operator || "")}">`) : ""}
+              ${addMode ? this._field(this._t("currency"), `<input name="currency" value="${this._escape(settings.currency || "CHF")}">`) : ""}
+            </div>
+            <div class="actions">
+              <button type="button" class="button" data-action="close-apartment-dialog">${this._t("cancel")}</button>
+              <button class="button primary" type="submit" ${this._busyAction ? "disabled" : ""}>${this._t(addMode ? "createApartment" : "renameApartment")}</button>
+            </div>
+          </form>
+        </section>
+      </div>`;
   }
 
   _tabs() {
@@ -517,7 +570,9 @@ class RentalConsumptionPanel extends HTMLElement {
     const period = this._editingPeriodId ? entry.periods.find((item) => item.period_id === this._editingPeriodId) : null;
     const type = period?.consumption_type || "electricity";
     const tariff = period?.tariff_mode || "single";
-    const provider = period?.provider ?? entry.settings.grid_operator ?? "";
+    const provider = period
+      ? (period.provider || "")
+      : (entry.settings.grid_operator || entry.providers?.[0] || "");
     return `<section class="card edit-card">
       <div class="section-header"><h2>${period ? this._t("editPeriod") : this._t("addPeriod")}</h2>${period ? `<button class="button subtle" data-action="cancel-edit">${this._t("cancel")}</button>` : ""}</div>
       <form id="period-form"><div class="form-grid">
@@ -560,6 +615,17 @@ class RentalConsumptionPanel extends HTMLElement {
 
   _bind() {
     this.shadowRoot.querySelector('[data-action="refresh"]')?.addEventListener("click", () => this._loadData());
+    this.shadowRoot.querySelector('[data-action="add-apartment"]')?.addEventListener("click", () => { this._apartmentDialog = "add"; this._render(); });
+    this.shadowRoot.querySelector('[data-action="edit-apartment"]')?.addEventListener("click", () => { this._apartmentDialog = "edit"; this._render(); });
+    this.shadowRoot.querySelectorAll('[data-action="close-apartment-dialog"]').forEach((element) => element.addEventListener("click", (event) => {
+      if (event.target.closest?.("[data-modal-card]") && event.currentTarget.classList.contains("modal-backdrop")) return;
+      this._apartmentDialog = null;
+      this._render();
+    }));
+    this.shadowRoot.querySelector(".modal-backdrop")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) { this._apartmentDialog = null; this._render(); }
+    });
+    this.shadowRoot.querySelector("#apartment-form")?.addEventListener("submit", (event) => this._handleApartment(event));
     this.shadowRoot.querySelector("#entry-select")?.addEventListener("change", (event) => {
       this._selectedEntryId = event.target.value;
       this._editingPeriodId = null;
@@ -628,6 +694,44 @@ class RentalConsumptionPanel extends HTMLElement {
   _replaceEntry(updated) {
     const index = this._data.entries.findIndex((entry) => entry.entry_id === updated.entry_id);
     if (index >= 0) this._data.entries[index] = updated;
+  }
+
+  async _handleApartment(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const addMode = this._apartmentDialog === "add";
+    if (addMode) {
+      await this._run("create-apartment", async () => {
+        const result = await this._hass.callWS({
+          type: "rental_consumption/create_apartment",
+          apartment_name: form.get("apartment_name") || "",
+          heating_unit: form.get("heating_unit") || "kWh",
+          grid_operator: form.get("grid_operator") || "",
+          currency: form.get("currency") || "CHF"
+        });
+        this._data = { entries: result.entries || [] };
+        this._selectedEntryId = result.entry_id;
+        this._editingPeriodId = null;
+        this._historyType = "all";
+        this._historyYear = "all";
+        this._historyProvider = "all";
+        this._activeTab = "overview";
+        this._apartmentDialog = null;
+        this._message = { kind: "success", text: this._t("apartmentCreated") };
+      });
+      return;
+    }
+
+    await this._run("update-apartment", async () => {
+      const updated = await this._hass.callWS({
+        type: "rental_consumption/update_apartment",
+        entry_id: this._entry.entry_id,
+        apartment_name: form.get("apartment_name") || ""
+      });
+      this._replaceEntry(updated);
+      this._apartmentDialog = null;
+      this._message = { kind: "success", text: this._t("apartmentRenamed") };
+    });
   }
 
   _periodPayload(form, edit) {
@@ -809,6 +913,11 @@ class RentalConsumptionPanel extends HTMLElement {
       safe_rebuild_not_supported: "Cette destination ne permet pas une reconstruction sûre avec suppression.",
       delete_not_supported: "La suppression sûre n’est pas disponible pour cette destination.",
       recorder_unavailable: "Recorder n’est pas disponible.",
+      recorder_error: "La reconstruction Recorder a échoué. Le détail technique est conservé ci-dessous.",
+      apartment_exists: "Un logement portant ce nom existe déjà.",
+      invalid_name: "Le nom du logement n’est pas valide.",
+      apartment_create_failed: "La création du logement a échoué.",
+      apartment_setup_failed: "Le logement a été créé mais son chargement dans Home Assistant a échoué.",
       overlap: "Cette période chevauche une période existante du même type.",
       future_end: "La date de fin ne peut pas être dans le futur.",
       database_required: "Le champ Database est obligatoire pour cette destination.",
@@ -826,6 +935,11 @@ class RentalConsumptionPanel extends HTMLElement {
       safe_rebuild_not_supported: "This destination does not support a safe delete-and-rebuild.",
       delete_not_supported: "Safe deletion is not available for this destination.",
       recorder_unavailable: "Recorder is unavailable.",
+      recorder_error: "Recorder reconstruction failed. The technical detail is preserved below.",
+      apartment_exists: "A dwelling with this name already exists.",
+      invalid_name: "The dwelling name is invalid.",
+      apartment_create_failed: "Creating the dwelling failed.",
+      apartment_setup_failed: "The dwelling was created but could not be loaded in Home Assistant.",
       overlap: "This period overlaps an existing period of the same type.",
       future_end: "The end date cannot be in the future.",
       database_required: "Database is required for this destination.",
@@ -846,7 +960,7 @@ class RentalConsumptionPanel extends HTMLElement {
       *{box-sizing:border-box} main{max-width:1500px;margin:0 auto;padding:24px 20px 56px} h1,h2,p{margin-top:0} h1{font-size:28px;margin-bottom:6px} h2{font-size:19px;margin-bottom:14px}
       .page-header,.section-header{display:flex;justify-content:space-between;align-items:center;gap:16px}.page-header{margin-bottom:18px}.page-header p,.muted,.help,small{color:var(--secondary-text-color)}
       .card,.summary-card,.period-row{background:var(--ha-card-background,var(--card-background-color));border-radius:var(--ha-card-border-radius,12px);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,none)}.card{padding:20px;margin-bottom:16px}
-      .picker-card label{display:grid;grid-template-columns:auto minmax(240px,1fr);align-items:center;gap:14px}.picker-card span{color:var(--secondary-text-color);font-size:13px}
+      .picker-row{display:grid;grid-template-columns:minmax(280px,1fr) auto;align-items:end;gap:14px}.picker-card label{display:grid;grid-template-columns:auto minmax(240px,1fr);align-items:center;gap:14px}.picker-card span{color:var(--secondary-text-color);font-size:13px}.picker-help{display:block;margin-top:10px}.apartment-actions{display:flex;gap:8px;flex-wrap:wrap}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 16px;padding:4px;background:var(--secondary-background-color);border-radius:12px;border:1px solid var(--divider-color)}.tab{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;cursor:pointer;white-space:nowrap}.tab.active{background:var(--card-background-color);color:var(--primary-color);box-shadow:var(--ha-card-box-shadow,0 1px 3px rgba(0,0,0,.12))}
       .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.summary-card{padding:16px;border-top:3px solid var(--primary-color)}.summary-card>span,.metric>span,.analysis-grid span,.analysis-mini span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:5px}.summary-card strong{font-size:20px}.summary-card small{font-size:12px}
       .overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.compact-card{margin-bottom:0}.analysis-mini{display:grid;gap:10px}.analysis-mini>div{display:grid;grid-template-columns:1fr auto;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--divider-color)}.analysis-mini>div:last-child{border-bottom:0;padding-bottom:0}
@@ -858,9 +972,10 @@ class RentalConsumptionPanel extends HTMLElement {
       .analysis-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px}.analysis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.analysis-grid>div{padding:13px;background:var(--secondary-background-color);border-radius:9px}.analysis-grid strong{word-break:break-word}
       .history-toolbar{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}.history-toolbar select{width:auto;min-width:180px}.period-list{display:grid;gap:10px}.period-row{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.8fr) minmax(170px,.9fr) minmax(220px,1fr) auto;gap:16px;align-items:center;padding:15px}.period-main{display:flex;align-items:center;gap:11px}.period-main strong,.period-main span,.period-main small{display:block}.period-main span,.provider-line{color:var(--secondary-text-color);font-size:12px;margin-top:4px}.provider-line{font-weight:600}.type-icon{font-size:22px;width:34px;height:34px;display:grid;place-items:center;background:var(--secondary-background-color);border-radius:9px}.metric strong{display:block;font-size:15px}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.badge.accent{color:var(--primary-color);border:1px solid color-mix(in srgb,var(--primary-color) 35%,transparent)}.period-actions{display:flex;gap:6px}.tariff-detail,.period-note{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.tariff-detail{display:flex;gap:20px}.tariff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.empty{text-align:center;padding:28px;color:var(--secondary-text-color)}
       .settings-card h2{margin-bottom:16px}.sticky-actions{position:sticky;bottom:8px;z-index:3;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--card-background-color) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--divider-color);margin-bottom:16px}.export-status{margin-top:18px;padding:14px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.compact-status{margin-top:8px}.status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--disabled-text-color,#888)}.status-dot.ok{background:var(--success-color,#43a047)}.status-dot.error{background:var(--error-color,#db4437)}.status-dot.testing{background:var(--warning-color,#ff9800)}.status-message{margin-top:8px;color:var(--secondary-text-color);font-size:12px;word-break:break-word}.status-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.step{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--card-background-color);border:1px solid var(--divider-color)}.step.ok{color:var(--success-color,#43a047)}.step.error{color:var(--error-color,#db4437)}
+      .modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:0 18px 55px rgba(0,0,0,.32)}.modal-card .section-header{margin-bottom:16px}
       .hidden{display:none!important}
       @media(max-width:1100px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
-      @media(max-width:700px){main{padding:14px 10px 40px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-card label{grid-template-columns:1fr}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
+      @media(max-width:700px){main{padding:14px 10px 40px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
     `;
   }
 }

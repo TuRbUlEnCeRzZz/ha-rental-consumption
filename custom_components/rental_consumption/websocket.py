@@ -9,10 +9,13 @@ import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.util import slugify
 
 from .const import (
+    CONF_APARTMENT_NAME,
     CONF_COST,
     CONF_CURRENCY,
     CONF_ELECTRICITY_DISTRIBUTION,
@@ -31,6 +34,7 @@ from .const import (
     CONF_EXPORT_USERNAME,
     CONF_GRID_OPERATOR,
     CONF_HEATING_BASE_TEMPERATURE,
+    CONF_HEATING_UNIT,
     CONF_HEATING_DISTRIBUTION,
     CONF_LOAD_CURVE_MIN_COVERAGE,
     CONF_LOAD_CURVE_SOURCE,
@@ -51,6 +55,8 @@ from .const import (
     DATA_WEBSOCKET_REGISTERED,
     DOMAIN,
     EXPORT_BACKENDS,
+    HEATING_UNITS,
+    HEATING_UNIT_KWH,
     LOAD_CURVE_SOURCES,
     TARIFF_MODES,
     TYPE_ELECTRICITY,
@@ -58,6 +64,7 @@ from .const import (
     TYPE_HOT_WATER,
     TYPE_WATER,
     WS_ADD_PERIOD,
+    WS_CREATE_APARTMENT,
     WS_DELETE_PERIOD,
     WS_GET_DATA,
     WS_REBUILD_STATISTICS,
@@ -66,6 +73,7 @@ from .const import (
     WS_UPDATE_PERIOD,
     WS_UPDATE_SETTINGS,
     WS_UPDATE_EXPORT_SETTINGS,
+    WS_UPDATE_APARTMENT,
 )
 from .exporter import ExportError
 from .manager import RentalConsumptionManager
@@ -79,6 +87,8 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         return
     for command in (
         websocket_get_data,
+        websocket_create_apartment,
+        websocket_update_apartment,
         websocket_add_period,
         websocket_update_period,
         websocket_delete_period,
@@ -149,6 +159,8 @@ def _serialize_manager(manager: RentalConsumptionManager) -> dict[str, Any]:
         "entry_id": manager.entry.entry_id,
         "title": manager.entry.title,
         "settings": {
+            "apartment_name": manager.entry.title,
+            "heating_unit": str(manager.entry.data.get(CONF_HEATING_UNIT, HEATING_UNIT_KWH)),
             "grid_operator": manager.grid_operator,
             "currency": manager.currency,
             "heating_distribution": manager.heating_distribution,
@@ -218,6 +230,95 @@ def websocket_get_data(
     msg: dict[str, Any],
 ) -> None:
     connection.send_result(msg["id"], {"entries": _all_entries(hass)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_CREATE_APARTMENT,
+        vol.Required(CONF_APARTMENT_NAME): cv.string,
+        vol.Optional(CONF_HEATING_UNIT, default=HEATING_UNIT_KWH): vol.In(HEATING_UNITS),
+        vol.Optional(CONF_GRID_OPERATOR, default=""): cv.string,
+        vol.Optional(CONF_CURRENCY, default="CHF"): cv.string,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_create_apartment(hass, connection, msg) -> None:
+    """Create another apartment through the existing config flow."""
+    name = str(msg[CONF_APARTMENT_NAME]).strip()
+    if not name:
+        connection.send_error(msg["id"], "invalid_name", "invalid_name")
+        return
+    if any(
+        entry.title.casefold() == name.casefold()
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    ):
+        connection.send_error(msg["id"], "apartment_exists", "apartment_exists")
+        return
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "user"},
+        data={
+            CONF_APARTMENT_NAME: name,
+            CONF_HEATING_UNIT: msg.get(CONF_HEATING_UNIT, HEATING_UNIT_KWH),
+            CONF_GRID_OPERATOR: str(msg.get(CONF_GRID_OPERATOR, "")).strip(),
+            CONF_CURRENCY: str(msg.get(CONF_CURRENCY, "CHF")).strip().upper() or "CHF",
+        },
+    )
+    if result.get("type") is not FlowResultType.CREATE_ENTRY:
+        reason = str(result.get("reason", "apartment_create_failed"))
+        connection.send_error(msg["id"], "apartment_create_failed", reason)
+        return
+
+    entry = result["result"]
+    await hass.async_block_till_done()
+    if _manager(hass, entry.entry_id) is None:
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    if _manager(hass, entry.entry_id) is None:
+        connection.send_error(
+            msg["id"], "apartment_setup_failed", "apartment_setup_failed"
+        )
+        return
+    connection.send_result(
+        msg["id"], {"entry_id": entry.entry_id, "entries": _all_entries(hass)}
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_UPDATE_APARTMENT,
+        vol.Required(CONF_ENTRY_ID): cv.string,
+        vol.Required(CONF_APARTMENT_NAME): cv.string,
+    }
+)
+@websocket_api.require_admin
+@callback
+def websocket_update_apartment(hass, connection, msg) -> None:
+    """Rename one apartment without rebuilding Recorder or external data."""
+    manager = _manager(hass, msg[CONF_ENTRY_ID])
+    if manager is None:
+        connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
+        return
+    name = str(msg[CONF_APARTMENT_NAME]).strip()
+    unique_id = slugify(name)
+    if not name or not unique_id:
+        connection.send_error(msg["id"], "invalid_name", "invalid_name")
+        return
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.entry_id == manager.entry.entry_id:
+            continue
+        if entry.title.casefold() == name.casefold() or entry.unique_id == unique_id:
+            connection.send_error(msg["id"], "apartment_exists", "apartment_exists")
+            return
+
+    data = dict(manager.entry.data)
+    data[CONF_APARTMENT_NAME] = name
+    hass.config_entries.async_update_entry(
+        manager.entry, data=data, title=name, unique_id=unique_id
+    )
+    connection.send_result(msg["id"], _serialize_manager(manager))
 
 
 _PERIOD_SCHEMA = {
@@ -341,8 +442,10 @@ async def websocket_rebuild_statistics(hass, connection, msg) -> None:
         return
     try:
         await manager.async_rebuild_statistics()
-    except (HomeAssistantError, RuntimeError):
-        connection.send_error(msg["id"], "recorder_unavailable", "recorder_unavailable")
+    except (HomeAssistantError, RuntimeError, ValueError) as err:
+        connection.send_error(
+            msg["id"], "recorder_error", f"recorder_error:{err}"
+        )
         return
     connection.send_result(msg["id"], _serialize_manager(manager))
 
@@ -413,6 +516,11 @@ async def websocket_update_settings(hass, connection, msg) -> None:
         )
     except PeriodValidationError as err:
         connection.send_error(msg["id"], err.code, err.code)
+        return
+    except (HomeAssistantError, RuntimeError, ValueError) as err:
+        connection.send_error(
+            msg["id"], "recorder_error", f"recorder_error:{err}"
+        )
         return
     connection.send_result(msg["id"], _serialize_manager(manager))
 

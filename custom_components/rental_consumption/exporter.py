@@ -42,6 +42,11 @@ def _escape_tag(value: str) -> str:
     )
 
 
+def _escape_matcher(value: str) -> str:
+    """Escape a value embedded in a VictoriaMetrics label matcher."""
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def _line(
     measurement: str,
     tags: dict[str, str],
@@ -154,7 +159,7 @@ class TimeSeriesExporter:
         raise ExportError("unsupported_backend", steps=steps)
 
     async def _async_test_victoriametrics(self) -> dict[str, Any]:
-        """Verify VictoriaMetrics health, write, read and delete capabilities."""
+        """Verify VictoriaMetrics health, write, raw read and delete capabilities."""
         steps: dict[str, str] = {}
         test_id = uuid4().hex
         timestamp = int(datetime.now(tz=timezone.utc).timestamp())
@@ -164,12 +169,9 @@ class TimeSeriesExporter:
             "entry_id": self.entry_id,
             "test_id": test_id,
         }
-        metric_name = "rental_consumption_connection_test_value"
-        selector = (
-            f'{{__name__="{metric_name}",integration="{DOMAIN}",'
-            f'source="connection_test",entry_id="{self.entry_id}",'
-            f'test_id="{test_id}"}}'
-        )
+        selector = "{" + ",".join(
+            f'{key}="{_escape_matcher(value)}"' for key, value in tags.items()
+        ) + "}"
         wrote_test_point = False
         try:
             async with self.session.get(
@@ -198,22 +200,35 @@ class TimeSeriesExporter:
             wrote_test_point = True
             steps["write"] = "ok"
 
-            # Give the single-node query path a very short window to expose the point.
-            await asyncio.sleep(0.1)
-            params = {"match": selector}
-            async with self.session.get(
-                f"{self._base()}/api/v1/export",
-                params=params,
-                headers=self._headers(),
-                auth=self._auth(),
-            ) as response:
-                body = await response.text()
-                if response.status >= 400:
-                    raise ExportError(
-                        f"read_failed:{response.status}:{body[:300]}", steps=steps
-                    )
-                if test_id not in body:
+            # Raw export is used instead of assuming VictoriaMetrics' final
+            # measurement_field metric name. Retry briefly because a successful
+            # ingestion can become query-visible a fraction of a second later.
+            read_deadline = asyncio.get_running_loop().time() + 5.0
+            last_body = ""
+            while True:
+                params = [
+                    ("match[]", selector),
+                    ("start", str(timestamp - 10)),
+                    ("end", str(timestamp + 10)),
+                    ("reduce_mem_usage", "1"),
+                ]
+                async with self.session.get(
+                    f"{self._base()}/api/v1/export",
+                    params=params,
+                    headers=self._headers(),
+                    auth=self._auth(),
+                ) as response:
+                    last_body = await response.text()
+                    if response.status >= 400:
+                        raise ExportError(
+                            f"read_failed:{response.status}:{last_body[:300]}",
+                            steps=steps,
+                        )
+                    if test_id in last_body:
+                        break
+                if asyncio.get_running_loop().time() >= read_deadline:
                     raise ExportError("read_failed:test_point_not_found", steps=steps)
+                await asyncio.sleep(0.25)
             steps["read"] = "ok"
 
             await self._async_delete_vm_selectors([selector])
@@ -365,18 +380,12 @@ class TimeSeriesExporter:
     async def _async_delete(self, tags: dict[str, str]) -> None:
         backend = self.config.backend
         if backend == EXPORT_VICTORIAMETRICS:
-            selectors = []
-            for metric in (
-                "rental_consumption_value",
-                "rental_consumption_cost_value",
-                "rental_consumption_tariff_value",
-            ):
-                labels = ",".join(
-                    [f'__name__="{metric}"']
-                    + [f'{key}="{value}"' for key, value in tags.items()]
-                )
-                selectors.append(f"{{{labels}}}")
-            await self._async_delete_vm_selectors(selectors)
+            # Ownership labels are sufficient and avoid depending on the
+            # configured Influx measurement/field separator in VictoriaMetrics.
+            labels = ",".join(
+                f'{key}="{_escape_matcher(value)}"' for key, value in tags.items()
+            )
+            await self._async_delete_vm_selectors([f"{{{labels}}}"])
             return
 
         if backend == EXPORT_INFLUXDB_V1:

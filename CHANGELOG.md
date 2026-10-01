@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.1 — 2026-10-01
+
+- Added direct multi-dwelling management from the sidebar.
+- Added **Add dwelling** and **Edit dwelling** actions; each dwelling remains a separate Home Assistant config entry.
+- Added a creation dialog for dwelling name, heating unit, default supplier and currency.
+- Added default-supplier recovery when v1.5.0 periods contain one supplier but the config-entry default is empty.
+- Fixed new-period supplier prefill with a fallback to the sole historical supplier.
+- Fixed VictoriaMetrics connection-test read-back by selecting the temporary series from ownership labels instead of assuming a final metric name.
+- Switched the VictoriaMetrics raw read test to the documented `match[]` parameter.
+- Added up to five seconds of retry time for freshly written VictoriaMetrics test points.
+- Made VictoriaMetrics delete/rebuild selectors measurement-name independent by using integration ownership labels.
+- Normalized ConfigEntry IDs before building Home Assistant external `statistic_id` values, including uppercase ULIDs.
+- Improved Recorder failure feedback by preserving the actual reconstruction error.
+
 ## 1.5.0 — 2026-10-01
 
 - Added DSO / supplier as a property of each billing period.

@@ -94,6 +94,7 @@ from .models import (
     build_daily_points,
     date_range,
     pearson_correlation,
+    normalize_statistic_entry_key,
     validate_period,
 )
 
@@ -184,6 +185,17 @@ class RentalConsumptionManager:
             except (KeyError, TypeError, ValueError):
                 _LOGGER.warning("Ignoring an invalid stored consumption period: %s", item)
         self._periods = loaded
+
+        # v1.5.1: recover the default provider when v1.5.0 periods already carry
+        # one provider but the ConfigEntry-level default is empty. This keeps the
+        # "Add period" form useful after the v1.5 migration.
+        providers = {period.provider.strip() for period in loaded if period.provider.strip()}
+        if not default_provider and len(providers) == 1:
+            default_provider = next(iter(providers))
+            entry_data = dict(self.entry.data)
+            entry_data[CONF_GRID_OPERATOR] = default_provider
+            self.hass.config_entries.async_update_entry(self.entry, data=entry_data)
+
         stored_status = raw.get("export_status")
         if isinstance(stored_status, dict):
             self._last_export_status = {
@@ -753,11 +765,15 @@ class RentalConsumptionManager:
             period.consumption_type == consumption_type for period in self._periods
         )
 
+    def statistic_entry_key(self) -> str:
+        """Return a Home Assistant-safe stable key derived from the ConfigEntry id."""
+        return normalize_statistic_entry_key(self.entry.entry_id)
+
     def statistic_id(self, consumption_type: ConsumptionType) -> str:
-        return f"{DOMAIN}:{self.entry.entry_id}_{consumption_type}"
+        return f"{DOMAIN}:{self.statistic_entry_key()}_{consumption_type}"
 
     def cost_statistic_id(self, consumption_type: ConsumptionType) -> str:
-        return f"{DOMAIN}:{self.entry.entry_id}_{consumption_type}_cost"
+        return f"{DOMAIN}:{self.statistic_entry_key()}_{consumption_type}_cost"
 
     def all_statistic_ids(self) -> list[str]:
         return [self.statistic_id(metric) for metric in CONSUMPTION_TYPES] + [

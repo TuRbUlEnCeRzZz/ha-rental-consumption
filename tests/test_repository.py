@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.5.0."""
+"""Repository-level consistency tests for v1.5.1."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.5.0"
+    assert manifest["version"] == VERSION == "1.5.1"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -30,12 +30,13 @@ def test_victoriametrics_connection_test_checks_real_capabilities() -> None:
     exporter = (INTEGRATION / "exporter.py").read_text(encoding="utf-8")
     assert "_async_test_victoriametrics" in exporter
     assert "rental_consumption_connection_test" in exporter
-    assert "/api/v1/export" in exporter
-    assert "_async_delete_vm_selectors" in exporter
+    assert '("match[]", selector)' in exporter
+    assert "read_deadline" in exporter
+    assert 'await asyncio.sleep(0.25)' in exporter
+    assert "_async_delete_vm_selectors([selector])" in exporter
     assert 'steps["write"] = "ok"' in exporter
     assert 'steps["read"] = "ok"' in exporter
     assert 'steps["delete"] = "ok"' in exporter
-
 
 def test_export_settings_are_decoupled_from_recorder_rebuild() -> None:
     manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")
@@ -91,3 +92,33 @@ def test_diagnostics_redact_export_secrets() -> None:
 def test_summary_sensors_do_not_use_total_state_class() -> None:
     source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     assert "SensorStateClass.TOTAL" not in source
+
+
+def test_multi_dwelling_commands_are_shipped() -> None:
+    const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
+    websocket = (INTEGRATION / "websocket.py").read_text(encoding="utf-8")
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert "WS_CREATE_APARTMENT" in const
+    assert "WS_UPDATE_APARTMENT" in const
+    assert "websocket_create_apartment" in websocket
+    assert "websocket_update_apartment" in websocket
+    assert "config_entries.flow.async_init" in websocket
+    assert "rental_consumption/create_apartment" in panel
+    assert "rental_consumption/update_apartment" in panel
+    assert "modal-backdrop" in panel
+
+
+def test_recorder_statistic_ids_are_normalized_and_errors_are_detailed() -> None:
+    manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")
+    websocket = (INTEGRATION / "websocket.py").read_text(encoding="utf-8")
+    assert "normalize_statistic_entry_key" in manager
+    assert "statistic_entry_key" in manager
+    assert '"recorder_error"' in websocket
+    assert 'f"recorder_error:{err}"' in websocket
+
+
+def test_provider_default_has_v151_recovery_and_frontend_fallback() -> None:
+    manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert "recover the default provider" in manager
+    assert "entry.providers?.[0]" in panel

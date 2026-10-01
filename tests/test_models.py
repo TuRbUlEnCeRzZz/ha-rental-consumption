@@ -18,6 +18,7 @@ from custom_components.rental_consumption.models import (
     build_daily_points,
     distribute_total,
     pearson_correlation,
+    normalize_statistic_entry_key,
     validate_period,
 )
 
@@ -178,3 +179,9 @@ def test_period_update_can_change_provider() -> None:
         provider="Nouveau fournisseur",
     )
     assert updated.provider == "Nouveau fournisseur"
+
+
+def test_statistic_entry_key_normalizes_current_ulid_and_legacy_values() -> None:
+    assert normalize_statistic_entry_key("01K6ABCDEF1234567890XYZABC") == "01k6abcdef1234567890xyzabc"
+    assert normalize_statistic_entry_key("ABC-DEF__GHI") == "abc_def_ghi"
+    assert normalize_statistic_entry_key("___") == "entry"

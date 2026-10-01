@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling.
 
 ## Highlights
 
@@ -24,7 +24,9 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - one responsive history layout for desktop and mobile;
 - DSO / supplier stored per billing period and filterable in history;
 - four persistent internal tabs: Overview, Periods, Analysis and Settings;
-- inline VictoriaMetrics connection diagnostics with health/write/read/delete feedback.
+- inline VictoriaMetrics connection diagnostics with health/write/read/delete feedback;
+- multiple dwellings managed directly from the sidebar, one Home Assistant config entry per dwelling;
+- Home Assistant-safe normalized external statistic identifiers.
 
 ## Compatibility
 
@@ -43,6 +45,34 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
 
+
+## What changed in v1.5.1
+
+### Multiple dwellings
+
+The top selector can now manage more than one dwelling directly from the sidebar. Each dwelling is a separate Home Assistant config entry and therefore keeps independent:
+
+- billing periods;
+- Recorder statistics;
+- supplier defaults;
+- heating/electricity allocation settings;
+- external database settings.
+
+Use **Add dwelling** to create another dwelling and **Edit dwelling** to rename the selected one. Renaming does not rebuild Recorder or rewrite external time-series data because the stable config-entry identity remains the data owner.
+
+### Supplier default recovery
+
+If v1.5.0 already migrated periods to a single supplier but the config-entry default supplier is empty, v1.5.1 recovers that default automatically. The **Add period** form also falls back to the sole historical supplier when appropriate.
+
+### VictoriaMetrics test reliability
+
+The connection test no longer assumes a fixed final metric name after Influx line-protocol ingestion. It finds the temporary point from its integration-owned labels, uses the documented `match[]` raw-export parameter and retries for up to five seconds before reporting a read failure.
+
+VictoriaMetrics cleanup also deletes integration-owned data by ownership labels rather than by hard-coded measurement/field metric names. This makes cleanup independent from the VictoriaMetrics Influx measurement-field separator.
+
+### Recorder statistic identifiers
+
+Config-entry IDs are normalized before they are used in Home Assistant external `statistic_id` values. Uppercase ULIDs and legacy IDs containing separators are converted to lowercase Home Assistant-safe keys. Recorder errors returned from manual rebuild/settings operations now preserve the actual technical error instead of always being reduced to `Recorder unavailable`.
 
 ## What changed in v1.5.0
 

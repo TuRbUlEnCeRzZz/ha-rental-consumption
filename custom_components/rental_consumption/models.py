@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from math import sqrt
+import re
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -163,6 +164,13 @@ class ConsumptionPeriod:
 
 def _float_or_none(value: Any) -> float | None:
     return None if value in (None, "") else float(value)
+
+
+def normalize_statistic_entry_key(value: str) -> str:
+    """Normalize a ConfigEntry id for Home Assistant external statistic ids."""
+    normalized = re.sub(r"[^a-z0-9_]+", "_", str(value).lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or "entry"
 
 
 def validate_period(
