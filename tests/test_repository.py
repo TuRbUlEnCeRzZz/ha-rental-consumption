@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.5.2."""
+"""Repository-level consistency tests for v1.5.3."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.5.2"
+    assert manifest["version"] == VERSION == "1.5.3"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -33,7 +33,10 @@ def test_victoriametrics_connection_test_checks_real_capabilities() -> None:
     assert "/prometheus/api/v1/query" in exporter
     assert '"query": selector' in exporter
     assert "read_deadline" in exporter
-    assert 'await asyncio.sleep(0.25)' in exporter
+    assert '"latency_offset": "0"' in exporter
+    assert "timestamp = int(datetime.now(tz=timezone.utc).timestamp()) - 120" in exporter
+    assert "+ 10.0" in exporter
+    assert 'await asyncio.sleep(0.5)' in exporter
     assert "_async_delete_vm_selectors([selector])" in exporter
     assert 'steps["write"] = "ok"' in exporter
     assert 'steps["read"] = "ok"' in exporter
@@ -146,3 +149,29 @@ def test_pv_electricity_supply_is_first_class() -> None:
 def test_frontend_has_single_period_payload_declaration() -> None:
     panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
     assert panel.count("const payload = this._periodPayload(new FormData(event.currentTarget), edit);") == 1
+
+
+def _png_dimensions(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height = __import__("struct").unpack(">II", data[16:24])
+    return width, height
+
+
+def test_brand_assets_are_complete_and_distinct() -> None:
+    brand = INTEGRATION / "brand"
+    expected = {
+        "icon.png": (256, 256),
+        "icon@2x.png": (512, 512),
+        "dark_icon.png": (256, 256),
+        "dark_icon@2x.png": (512, 512),
+        "logo.png": (800, 200),
+        "logo@2x.png": (1600, 400),
+        "dark_logo.png": (800, 200),
+        "dark_logo@2x.png": (1600, 400),
+    }
+    for filename, dimensions in expected.items():
+        path = brand / filename
+        assert path.exists(), filename
+        assert _png_dimensions(path) == dimensions
+    assert (brand / "icon.png").read_bytes() != (brand / "logo.png").read_bytes()

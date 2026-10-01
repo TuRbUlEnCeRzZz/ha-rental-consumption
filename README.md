@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling. Version 1.5.2 stabilizes the VictoriaMetrics connection test and adds separately billed photovoltaic electricity supply.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling. Version 1.5.2 adds separately billed photovoltaic electricity supply. Version 1.5.3 fixes the VictoriaMetrics connection-test false negative caused by recent-sample query latency and refreshes the local Home Assistant brand assets.
 
 ## Highlights
 
@@ -46,6 +46,24 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
 
+
+## What changed in v1.5.3
+
+### VictoriaMetrics connection-test latency
+
+VictoriaMetrics hides very recent samples from instant and range queries by default through its search latency offset. A successful test write could therefore be followed by `read_failed:test_point_not_found` even though the normal historical backfill worked correctly.
+
+v1.5.3 writes the temporary test point two minutes in the past, requests `latency_offset=0`, and retries the read for up to ten seconds. This tests the same real write/read/delete path without requiring a production force-flush.
+
+### Branding refresh
+
+The integration now ships a complete local `brand/` set in the release archive:
+
+- square `icon.png` and `icon@2x.png`;
+- rectangular `logo.png` and `logo@2x.png`;
+- dark-theme variants for both icon and logo.
+
+The icon and logo are now separate assets instead of reusing the same square image. Home Assistant 2026.3+ can serve these local brand images directly.
 
 ## What changed in v1.5.2
 

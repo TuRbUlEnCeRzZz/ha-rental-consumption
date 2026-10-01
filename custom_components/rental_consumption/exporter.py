@@ -162,7 +162,10 @@ class TimeSeriesExporter:
         """Verify VictoriaMetrics health, write, query read and delete capabilities."""
         steps: dict[str, str] = {}
         test_id = uuid4().hex
-        timestamp = int(datetime.now(tz=timezone.utc).timestamp())
+        # Write the probe far enough in the past to bypass VictoriaMetrics'
+        # default search latency offset. Recently ingested samples are hidden from
+        # query/query_range for ~30 s by default, even when the write succeeded.
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp()) - 120
         tags = {
             "integration": DOMAIN,
             "source": "connection_test",
@@ -205,12 +208,20 @@ class TimeSeriesExporter:
             # importer. This is the same query surface used by the load-curve
             # reader and works with any final metric name as long as our unique
             # connection-test labels are preserved.
-            read_deadline = asyncio.get_running_loop().time() + 5.0
+            read_deadline = asyncio.get_running_loop().time() + 10.0
             last_body = ""
             while True:
                 async with self.session.get(
                     f"{self._base()}/prometheus/api/v1/query",
-                    params={"query": selector, "time": str(timestamp + 1)},
+                    params={
+                        "query": selector,
+                        "time": str(timestamp + 1),
+                        "step": "5m",
+                        # Explicitly disable the per-query latency offset as an
+                        # additional safeguard. The backdated timestamp above also
+                        # makes the test work on servers that ignore this parameter.
+                        "latency_offset": "0",
+                    },
                     headers=self._headers(),
                     auth=self._auth(),
                 ) as response:
@@ -235,7 +246,7 @@ class TimeSeriesExporter:
                         break
                 if asyncio.get_running_loop().time() >= read_deadline:
                     raise ExportError("read_failed:test_point_not_found", steps=steps)
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.5)
             steps["read"] = "ok"
 
             await self._async_delete_vm_selectors([selector])
