@@ -214,13 +214,11 @@ class TimeSeriesExporter:
                 async with self.session.get(
                     f"{self._base()}/prometheus/api/v1/query",
                     params={
-                        "query": selector,
-                        "time": str(timestamp + 1),
-                        "step": "5m",
-                        # Explicitly disable the per-query latency offset as an
-                        # additional safeguard. The backdated timestamp above also
-                        # makes the test work on servers that ignore this parameter.
-                        "latency_offset": "0",
+                        # Query a short look-back window at current time. The
+                        # probe sample is two minutes old, so it is outside the
+                        # default VictoriaMetrics recent-sample latency window.
+                        # This also avoids version-specific latency_offset rules.
+                        "query": f"last_over_time({selector}[5m])",
                     },
                     headers=self._headers(),
                     auth=self._auth(),

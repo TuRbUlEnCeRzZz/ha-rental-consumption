@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.5.3."""
+"""Repository-level consistency tests for v1.6.0."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.5.3"
+    assert manifest["version"] == VERSION == "1.6.0"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -31,9 +31,9 @@ def test_victoriametrics_connection_test_checks_real_capabilities() -> None:
     assert "_async_test_victoriametrics" in exporter
     assert "rental_consumption_connection_test" in exporter
     assert "/prometheus/api/v1/query" in exporter
-    assert '"query": selector' in exporter
+    assert 'last_over_time({selector}[5m])' in exporter
     assert "read_deadline" in exporter
-    assert '"latency_offset": "0"' in exporter
+    assert '"latency_offset": "0"' not in exporter
     assert "timestamp = int(datetime.now(tz=timezone.utc).timestamp()) - 120" in exporter
     assert "+ 10.0" in exporter
     assert 'await asyncio.sleep(0.5)' in exporter
@@ -175,3 +175,24 @@ def test_brand_assets_are_complete_and_distinct() -> None:
         assert path.exists(), filename
         assert _png_dimensions(path) == dimensions
     assert (brand / "icon.png").read_bytes() != (brand / "logo.png").read_bytes()
+
+
+def test_v160_analysis_api_and_charts_are_shipped() -> None:
+    const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
+    manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")
+    websocket = (INTEGRATION / "websocket.py").read_text(encoding="utf-8")
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert "WS_GET_ANALYSIS_DATA" in const
+    assert "async_analysis_payload" in manager
+    assert "websocket_get_analysis_data" in websocket
+    assert "rental_consumption/get_analysis_data" in panel
+    assert "_lineChart" in panel
+    assert "_mixChart" in panel
+    assert "analysis-granularity" in panel
+    assert "analysis-metric" in panel
+
+
+def test_v160_vm_test_does_not_send_invalid_zero_latency_offset() -> None:
+    exporter = (INTEGRATION / "exporter.py").read_text(encoding="utf-8")
+    assert '"latency_offset": "0"' not in exporter
+    assert "timestamp = int(datetime.now(tz=timezone.utc).timestamp()) - 120" in exporter

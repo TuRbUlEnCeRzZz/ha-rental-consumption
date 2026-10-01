@@ -68,6 +68,7 @@ from .const import (
     WS_CREATE_APARTMENT,
     WS_DELETE_PERIOD,
     WS_GET_DATA,
+    WS_GET_ANALYSIS_DATA,
     WS_REBUILD_STATISTICS,
     WS_SYNC_EXPORT,
     WS_TEST_EXPORT,
@@ -88,6 +89,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         return
     for command in (
         websocket_get_data,
+        websocket_get_analysis_data,
         websocket_create_apartment,
         websocket_update_apartment,
         websocket_add_period,
@@ -234,6 +236,35 @@ def websocket_get_data(
     msg: dict[str, Any],
 ) -> None:
     connection.send_result(msg["id"], {"entries": _all_entries(hass)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_GET_ANALYSIS_DATA,
+        vol.Required(CONF_ENTRY_ID): cv.string,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_get_analysis_data(hass, connection, msg) -> None:
+    """Return chart-ready deterministic analytics for one dwelling."""
+    manager = _manager(hass, msg[CONF_ENTRY_ID])
+    if manager is None:
+        connection.send_error(msg["id"], "entry_not_found", "entry_not_found")
+        return
+    try:
+        payload = await manager.async_analysis_payload()
+    except (HomeAssistantError, RuntimeError, ValueError) as err:
+        connection.send_error(msg["id"], "analysis_error", f"analysis_error:{err}")
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "entry_id": manager.entry.entry_id,
+            "title": manager.entry.title,
+            **payload,
+        },
+    )
 
 
 @websocket_api.websocket_command(

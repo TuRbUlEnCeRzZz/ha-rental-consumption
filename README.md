@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.0 consolidates supplier history, settings persistence and database diagnostics. Version 1.5.1 adds direct multi-dwelling management and hardens VictoriaMetrics and Recorder handling. Version 1.5.2 adds separately billed photovoltaic electricity supply. Version 1.5.3 fixes the VictoriaMetrics connection-test false negative caused by recent-sample query latency and refreshes the local Home Assistant brand assets.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 adds deterministic charts and analyses while using the exact same reconstructed allocation as Recorder.
 
 ## Highlights
 
@@ -28,6 +28,10 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - multiple dwellings managed directly from the sidebar, one Home Assistant config entry per dwelling;
 - Home Assistant-safe normalized external statistic identifiers;
 - separate PV electricity supply totals, costs, Recorder statistics and external time-series tags.
+- deterministic Analysis-tab graphs for consumption, costs and unit prices;
+- period, monthly and annual analysis granularities;
+- latest-period comparisons normalized by day;
+- monthly grid/PV supply mix and PV share.
 
 ## Compatibility
 
@@ -46,6 +50,46 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
 
+
+
+## What changed in v1.6.0
+
+### Deterministic charts and analysis
+
+The **Analysis** tab now loads a separate chart-ready dataset for the selected dwelling. It is calculated from the stored billing periods and uses the same allocation rules as Recorder:
+
+- grid electricity: load-curve weighting when available;
+- heating: outdoor-temperature degree-day weighting when configured;
+- water, hot water and PV supply: uniform allocation;
+- existing fallbacks remain unchanged.
+
+Three chart granularities are available:
+
+```text
+By period | Monthly | Annual
+```
+
+For each supported consumption type, the graph can display:
+
+```text
+Consumption | Cost | Unit price
+```
+
+The analysis also shows the latest billing period, normalized daily consumption, cost, unit price and changes compared with the previous billing period. A simple three-period trend is calculated from normalized daily consumption.
+
+### Grid / PV supply mix
+
+When grid electricity and PV supply are available, the Analysis tab shows a monthly stacked supply view and the PV share of total billed electricity supply. Grid and PV billing remain separate source types; the combined view is analytical only.
+
+### VictoriaMetrics connection probe
+
+Some VictoriaMetrics versions reject `latency_offset=0ms` because their minimum accepted value is 1 ms. v1.6.0 no longer overrides `latency_offset`. The temporary probe is still written two minutes in the past and is read with:
+
+```text
+last_over_time({integration="rental_consumption",source="connection_test",...}[5m])
+```
+
+This keeps the probe outside the recent-sample latency window without relying on version-specific query parameters.
 
 ## What changed in v1.5.3
 

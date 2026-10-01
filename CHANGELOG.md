@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.6.0 — 2026-10-01
+
+- Added deterministic chart-ready analytics through a dedicated `rental_consumption/get_analysis_data` WebSocket command.
+- Added consumption, cost and unit-price graphs in the Analysis tab.
+- Added period, monthly and annual granularities.
+- Monthly and annual values reuse the same weighting as Recorder: electricity load curve, heating degree days, or uniform fallback.
+- Added latest-period comparison against the previous period, including normalized daily consumption, cost and unit-price changes.
+- Added simple three-period normalized-consumption trend classification.
+- Added monthly grid / PV supply mix visualization and PV share.
+- Kept grid electricity and PV electricity as separate billing sources while allowing combined supply analysis.
+- Fixed the VictoriaMetrics connection test for servers rejecting `latency_offset=0ms`.
+- Reworked the VictoriaMetrics read-back probe to query `last_over_time(...[5m])` for a backdated test point without overriding `latency_offset`.
+- Kept the refreshed local branding introduced in v1.5.3.
+
+## 1.5.3 — 2026-10-01
+
+- Fixed the VictoriaMetrics connection-test false negative `read_failed:test_point_not_found`.
+- Backdated the temporary connection-test sample by two minutes to avoid the default VictoriaMetrics query latency window.
+- Added `latency_offset=0` to the VictoriaMetrics probe query and increased the retry window to ten seconds.
+- Kept best-effort cleanup of failed connection-test points.
+- Refreshed the local Home Assistant branding assets.
+- Added separate rectangular logos instead of reusing the square icon as the logo.
+- Added `@2x` and dark-theme brand variants.
+- Included the complete `brand/` directory in the v1.5.3 release archive.
+
 ## 1.5.2 — 2026-10-01
 
 - Fixed the VictoriaMetrics connection-test false negative seen after successful writes and historical backfills.

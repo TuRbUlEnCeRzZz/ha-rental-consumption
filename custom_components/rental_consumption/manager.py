@@ -87,6 +87,7 @@ from .const import (
     TYPE_WATER,
     ConsumptionType,
 )
+from .analytics import build_analysis_payload
 from .exporter import ExportConfig, ExportError, TimeSeriesExporter
 from .models import (
     ConsumptionPeriod,
@@ -1263,6 +1264,26 @@ class RentalConsumptionManager:
             "fallback_periods": 0,
             "fallback_reason": None,
         }
+
+
+    async def async_analysis_payload(self) -> dict[str, Any]:
+        """Return chart-ready analytics using the same allocation as Recorder."""
+        async with self._lock:
+            heating_weights = await self._async_build_heating_weights()
+            electricity_weights = await self._async_build_electricity_weights()
+            units = {metric: self.unit(metric) for metric in CONSUMPTION_TYPES}
+            return build_analysis_payload(
+                self.periods,
+                units,
+                self.currency,
+                {
+                    TYPE_HEATING: heating_weights,
+                    TYPE_ELECTRICITY: electricity_weights,
+                    TYPE_PV_ELECTRICITY: None,
+                    TYPE_WATER: None,
+                    TYPE_HOT_WATER: None,
+                },
+            )
 
     async def async_remove_data(self) -> None:
         recorder = get_instance(self.hass)

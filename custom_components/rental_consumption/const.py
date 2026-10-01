@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.5.3"
+VERSION: Final = "1.6.0"
 
 PLATFORMS: Final = ["sensor"]
 
@@ -19,6 +19,7 @@ DATA_FRONTEND_PANEL_REGISTERED: Final = f"{DOMAIN}_frontend_panel_registered"
 DATA_WEBSOCKET_REGISTERED: Final = f"{DOMAIN}_websocket_registered"
 
 WS_GET_DATA: Final = f"{DOMAIN}/get_data"
+WS_GET_ANALYSIS_DATA: Final = f"{DOMAIN}/get_analysis_data"
 WS_CREATE_APARTMENT: Final = f"{DOMAIN}/create_apartment"
 WS_UPDATE_APARTMENT: Final = f"{DOMAIN}/update_apartment"
 WS_ADD_PERIOD: Final = f"{DOMAIN}/add_period"
