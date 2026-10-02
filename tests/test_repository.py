@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.6.1."""
+"""Repository-level consistency tests for v1.6.2."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.6.1"
+    assert manifest["version"] == VERSION == "1.6.2"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -226,3 +226,23 @@ def test_v161_external_errors_are_not_appended_to_friendly_headlines() -> None:
     panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
     assert '`${message}${raw.includes(":")' not in panel
     assert "_technicalDetail(errorInfo.detail)" in panel
+
+
+def test_v162_empty_states_onboarding_and_period_ux_are_shipped() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    utils = (INTEGRATION / "frontend" / "ui-utils.mjs").read_text(encoding="utf-8")
+    assert "_setupChecklist" in panel
+    assert "noPeriodEntered" in panel
+    assert 'data-action="add-period-type"' in panel
+    assert "ha-date-input" in panel
+    assert "periodDurationDays" in panel
+    assert "period-unit-price" in panel
+    assert "calculateUnitPrice" in panel
+    assert "calculateTotalCost" in panel
+    assert "badgeMethod" in panel
+    assert "rebuildDescription" in panel
+    assert "rebuildRunning" in panel
+    assert "coverageNotRequired" in panel
+    assert "periodDurationDays" in utils
+    assert "calculateUnitPrice" in utils
+    assert "calculateTotalCost" in utils

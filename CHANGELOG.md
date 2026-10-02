@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.2 — 2026-10-02
+
+- Added Overview empty states so missing billing periods are no longer presented as zero consumption.
+- Added direct **Add a period** actions from empty summary and allocation cards with the consumption type preselected.
+- Added a first-run checklist for dwelling setup, incoming-power sensor, first period and external-database verification.
+- Clarified heating empty/configuration states; uniform heating allocation no longer displays a misleading 0% temperature coverage.
+- Replaced period date fields with Home Assistant `ha-date-input` when available, preserving a native date-input fallback.
+- Made period date presentation follow the Home Assistant locale.
+- Added an explicit inclusive-end-date explanation and live billing-period duration calculation.
+- Added bidirectional total-cost / unit-price calculation in the period form without changing the stored backend model.
+- Expanded history badges to explicitly label tariff, allocation method, data source and coverage.
+- Strengthened delete confirmation by including the selected period details.
+- Added Recorder rebuild description, confirmation and visible in-progress state.
+- Added pure frontend tests for inclusive day counting and cost/unit-price calculations.
+- Kept v1.6.3 roadmap items for shared time-scope selection and previous/next period navigation in Analysis.
+- Updated README and validation tests.
+
 ## 1.6.1 — 2026-10-01
 
 - Reworked user-facing error handling so raw backend errors are hidden behind a collapsed technical-details block.

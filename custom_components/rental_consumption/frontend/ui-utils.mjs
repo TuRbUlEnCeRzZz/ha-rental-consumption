@@ -12,6 +12,28 @@ export function percentToCoverage(value) {
   return Math.round((clamp(value, 0, 100) / 100) * 10000) / 10000;
 }
 
+export function periodDurationDays(startDate, endDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startDate ?? "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(endDate ?? ""))) return null;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
+export function calculateUnitPrice(consumption, cost) {
+  const use = Number(consumption);
+  const amount = Number(cost);
+  if (!Number.isFinite(use) || use <= 0 || !Number.isFinite(amount) || amount < 0) return null;
+  return amount / use;
+}
+
+export function calculateTotalCost(consumption, unitPrice) {
+  const use = Number(consumption);
+  const price = Number(unitPrice);
+  if (!Number.isFinite(use) || use <= 0 || !Number.isFinite(price) || price < 0) return null;
+  return use * price;
+}
+
 const ERROR_CODES = [
   "tariff_total_mismatch",
   "tariff_cost_mismatch",

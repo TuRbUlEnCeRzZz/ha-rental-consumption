@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  calculateTotalCost,
+  calculateUnitPrice,
   classifyError,
   coverageToPercent,
   exportStatusLevel,
   percentToCoverage,
+  periodDurationDays,
 } from "../custom_components/rental_consumption/frontend/ui-utils.mjs";
 
 test("coverage is shown as a percentage and converted back", () => {
@@ -33,4 +36,20 @@ test("partial export failures use a warning-level global state", () => {
   assert.equal(exportStatusLevel("ok", { health: "ok", write: "ok", read: "ok" }), "ok");
   assert.equal(exportStatusLevel("error", { health: "ok", write: "ok", read: "error" }), "warning");
   assert.equal(exportStatusLevel("error", { health: "error" }), "error");
+});
+
+
+test("inclusive period duration uses calendar days", () => {
+  assert.equal(periodDurationDays("2026-05-01", "2026-07-31"), 92);
+  assert.equal(periodDurationDays("2026-05-01", "2026-05-01"), 1);
+  assert.equal(periodDurationDays("2026-07-31", "2026-05-01"), null);
+});
+
+test("cost and unit price calculate in both directions", () => {
+  const price = calculateUnitPrice(649, 205.78);
+  assert.ok(Math.abs(price - (205.78 / 649)) < 1e-12);
+  const cost = calculateTotalCost(649, 0.31707);
+  assert.ok(Math.abs(cost - 205.77843) < 1e-9);
+  assert.equal(calculateUnitPrice(0, 10), null);
+  assert.equal(calculateTotalCost(10, -1), null);
 });

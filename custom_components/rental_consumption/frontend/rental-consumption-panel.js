@@ -1,4 +1,12 @@
-import { classifyError, coverageToPercent, exportStatusLevel, percentToCoverage } from "./ui-utils.mjs";
+import {
+  calculateTotalCost,
+  calculateUnitPrice,
+  classifyError,
+  coverageToPercent,
+  exportStatusLevel,
+  percentToCoverage,
+  periodDurationDays,
+} from "./ui-utils.mjs";
 
 class RentalConsumptionPanel extends HTMLElement {
   constructor() {
@@ -24,6 +32,8 @@ class RentalConsumptionPanel extends HTMLElement {
     this._settingsDirty = false;
     this._exportDirty = false;
     this._advancedSettingsOpen = false;
+    this._newPeriodType = null;
+    this._priceDriver = "cost";
   }
 
   set hass(hass) {
@@ -183,6 +193,7 @@ class RentalConsumptionPanel extends HTMLElement {
         vsPrevious: "par rapport à la période précédente",
         normalizedUse: "Consommation/jour",
         daysShort: "j",
+        daysLong: "jours",
         perDay: "/j",
         trend: "Tendance",
         trendUp: "En hausse",
@@ -196,6 +207,33 @@ class RentalConsumptionPanel extends HTMLElement {
         deterministicAnalysis: "Analyse déterministe basée sur les périodes enregistrées et la même répartition que Recorder.",
         analysisLoadError: "Impossible de calculer les données d’analyse.",
         noConfiguration: "Aucune configuration.",
+        noPeriodEntered: "Aucune période saisie",
+        addFirstPeriod: "Ajouter une période",
+        setupTitle: "Démarrage",
+        setupIntro: "Quelques étapes permettent de terminer la configuration du logement.",
+        setupApartment: "Créer le logement",
+        setupLoadSensor: "Choisir le capteur d’introduction",
+        setupFirstPeriod: "Saisir une première période",
+        setupExternal: "Vérifier la base externe",
+        setupDone: "Terminé",
+        setupOptional: "Facultatif",
+        configure: "Configurer",
+        heatingNoPeriods: "Aucune période de chauffage n’est encore saisie.",
+        heatingSensorMissing: "Le capteur de température extérieure n’est pas configuré.",
+        coverageNotRequired: "Non requise avec une répartition uniforme",
+        notRequired: "Non requis",
+        periodDuration: "Durée de la période",
+        endIncludedHelp: "La date de fin est incluse dans le décompte.",
+        unitPriceInput: "Prix unitaire",
+        costPriceHelp: "Saisissez le coût total ou le prix unitaire : l’autre valeur est calculée automatiquement.",
+        badgeTariff: "Tarif",
+        badgeMethod: "Méthode",
+        badgeSource: "Source",
+        badgeData: "Données",
+        rebuildDescription: "Efface puis recrée les statistiques historiques Recorder à partir des périodes enregistrées.",
+        rebuildRunning: "Reconstruction Recorder en cours…",
+        recorderRebuildConfirm: "Reconstruire l’historique Recorder à partir de toutes les périodes enregistrées ?",
+        datePlaceholder: "jj.mm.aaaa",
         advancedSettings: "Paramètres avancés",
         showAdvanced: "Afficher les paramètres avancés",
         hideAdvanced: "Masquer les paramètres avancés",
@@ -422,6 +460,7 @@ class RentalConsumptionPanel extends HTMLElement {
         vsPrevious: "compared with the previous period",
         normalizedUse: "Consumption/day",
         daysShort: "d",
+        daysLong: "days",
         perDay: "/day",
         trend: "Trend",
         trendUp: "Increasing",
@@ -435,6 +474,33 @@ class RentalConsumptionPanel extends HTMLElement {
         deterministicAnalysis: "Deterministic analysis based on stored periods and the same allocation used by Recorder.",
         analysisLoadError: "Unable to calculate analysis data.",
         noConfiguration: "No configuration.",
+        noPeriodEntered: "No period entered",
+        addFirstPeriod: "Add a period",
+        setupTitle: "Getting started",
+        setupIntro: "A few steps complete the dwelling configuration.",
+        setupApartment: "Create the dwelling",
+        setupLoadSensor: "Choose the incoming power sensor",
+        setupFirstPeriod: "Enter a first period",
+        setupExternal: "Check the external database",
+        setupDone: "Done",
+        setupOptional: "Optional",
+        configure: "Configure",
+        heatingNoPeriods: "No heating period has been entered yet.",
+        heatingSensorMissing: "The outdoor temperature sensor is not configured.",
+        coverageNotRequired: "Not required with uniform distribution",
+        notRequired: "Not required",
+        periodDuration: "Period duration",
+        endIncludedHelp: "The end date is included in the billing period.",
+        unitPriceInput: "Unit price",
+        costPriceHelp: "Enter either the total cost or the unit price; the other value is calculated automatically.",
+        badgeTariff: "Tariff",
+        badgeMethod: "Method",
+        badgeSource: "Source",
+        badgeData: "Data",
+        rebuildDescription: "Clears and recreates Recorder long-term statistics from the saved periods.",
+        rebuildRunning: "Rebuilding Recorder…",
+        recorderRebuildConfirm: "Rebuild Recorder history from all saved periods?",
+        datePlaceholder: "dd.mm.yyyy",
         advancedSettings: "Advanced settings",
         showAdvanced: "Show advanced settings",
         hideAdvanced: "Hide advanced settings",
@@ -763,15 +829,54 @@ class RentalConsumptionPanel extends HTMLElement {
     const types = ["water", "hot_water", "heating", "electricity", "pv_electricity"];
     const exportStatus = entry.export?.last_status || {};
     return `
+      ${this._setupChecklist(entry)}
       ${this._overviewNotices(entry)}
       <section class="summary-grid">
-        ${types.map((type) => `<article class="summary-card"><span>${this._typeLabel(type)}</span><strong>${this._num(entry.totals[type], 3)} <small>${this._escape(entry.units[type])}</small></strong><div>${this._num(entry.costs[type]?.total, 2)} ${this._escape(entry.units.currency)}</div><small>${entry.costs[type]?.average_unit_price == null ? "—" : `${this._num(entry.costs[type].average_unit_price, 4)} ${this._escape(entry.units.unit_prices[type])}`}</small></article>`).join("")}
+        ${types.map((type) => this._summaryCard(entry, type)).join("")}
       </section>
       <section class="overview-grid">
-        <article class="card compact-card"><h2>${this._t("electricity")}</h2>${this._analysisSummary(entry.electricity_analysis, false)}</article>
-        <article class="card compact-card"><h2>${this._t("heating")}</h2>${this._analysisSummary(entry.heating_analysis, true)}</article>
+        ${this._overviewAnalysisCard(entry, "electricity", false)}
+        ${this._overviewAnalysisCard(entry, "heating", true)}
         <article class="card compact-card"><h2>${this._t("exportSettings")}</h2>${this._exportStatus(entry, exportStatus, true)}</article>
       </section>`;
+  }
+
+  _summaryCard(entry, type) {
+    const count = Number(entry.counts?.[type] || 0);
+    if (!count) {
+      return `<article class="summary-card empty-summary"><span>${this._typeLabel(type)}</span><strong class="empty-title">${this._t("noPeriodEntered")}</strong><button class="button compact" data-action="add-period-type" data-type="${type}">${this._t("addFirstPeriod")}</button></article>`;
+    }
+    return `<article class="summary-card"><span>${this._typeLabel(type)}</span><strong>${this._num(entry.totals[type], 3)} <small>${this._escape(entry.units[type])}</small></strong><div>${this._num(entry.costs[type]?.total, 2)} ${this._escape(entry.units.currency)}</div><small>${entry.costs[type]?.average_unit_price == null ? "—" : `${this._num(entry.costs[type].average_unit_price, 4)} ${this._escape(entry.units.unit_prices[type])}`}</small></article>`;
+  }
+
+  _overviewAnalysisCard(entry, type, heating) {
+    const count = Number(entry.counts?.[type] || 0);
+    const title = this._typeLabel(type);
+    if (!count) {
+      const text = heating ? this._t("heatingNoPeriods") : this._t("noPeriodEntered");
+      return `<article class="card compact-card"><h2>${title}</h2><div class="inline-empty"><span>${text}</span><button class="button compact" data-action="add-period-type" data-type="${type}">${this._t("addFirstPeriod")}</button></div></article>`;
+    }
+    if (heating && entry.heating_analysis?.configured_distribution === "outdoor_temperature" && !entry.settings?.outdoor_temperature_sensor) {
+      return `<article class="card compact-card"><h2>${title}</h2><div class="inline-empty warning-inline"><span>${this._t("heatingSensorMissing")}</span><button class="button compact" data-action="open-settings">${this._t("configure")}</button></div></article>`;
+    }
+    return `<article class="card compact-card"><h2>${title}</h2>${this._analysisSummary(heating ? entry.heating_analysis : entry.electricity_analysis, heating)}</article>`;
+  }
+
+  _setupChecklist(entry) {
+    const hasApartment = Boolean(entry?.entry_id);
+    const hasPeriods = Number(entry?.counts?.all || 0) > 0;
+    const needsLoadSensor = entry?.settings?.electricity_distribution === "load_curve" || Number(entry?.counts?.electricity || 0) > 0;
+    const hasLoadSensor = !needsLoadSensor || Boolean(entry?.settings?.electricity_load_sensor);
+    const exportConfigured = entry?.export?.backend && entry.export.backend !== "none";
+    const exportReady = !exportConfigured || entry?.export?.last_status?.status === "ok";
+    if (hasApartment && hasPeriods && hasLoadSensor && exportReady) return "";
+    const steps = [
+      { ok: hasApartment, label: this._t("setupApartment"), action: "setup-apartment", optional: false },
+      { ok: hasLoadSensor, label: this._t("setupLoadSensor"), action: "setup-settings", optional: !needsLoadSensor },
+      { ok: hasPeriods, label: this._t("setupFirstPeriod"), action: "setup-period", optional: false },
+      { ok: exportConfigured && entry?.export?.last_status?.status === "ok", label: this._t("setupExternal"), action: "setup-export", optional: !exportConfigured },
+    ];
+    return `<section class="card setup-card"><div class="section-header"><div><h2>${this._t("setupTitle")}</h2><p class="muted">${this._t("setupIntro")}</p></div></div><div class="setup-steps">${steps.map((step) => `<div class="setup-step ${step.ok ? "done" : "pending"}"><span class="setup-check">${step.ok ? "✓" : (step.optional ? "○" : "•")}</span><div><strong>${step.label}</strong>${step.optional ? `<small>${this._t("setupOptional")}</small>` : ""}</div>${!step.ok ? `<button class="button compact" data-action="${step.action}">${this._t("configure")}</button>` : `<span class="setup-done">${this._t("setupDone")}</span>`}</div>`).join("")}</div></section>`;
   }
 
   _overviewNotices(entry) {
@@ -801,7 +906,10 @@ class RentalConsumptionPanel extends HTMLElement {
       <section class="card history-card">
         <div class="section-header">
           <div><h2>${this._t("history")}</h2><span class="muted">${filtered.length} ${this._t("periods").toLowerCase()}</span></div>
-          <button class="button subtle" data-action="rebuild" ${this._busyAction ? "disabled" : ""} title="${this._escape(this._t("recorderHelp"))}">${this._busyAction === "rebuild" ? "…" : this._t("rebuild")}</button>
+          <div class="recorder-action">
+            <button class="button subtle" data-action="rebuild" ${this._busyAction ? "disabled" : ""} aria-busy="${this._busyAction === "rebuild" ? "true" : "false"}" title="${this._escape(this._t("recorderHelp"))}">${this._busyAction === "rebuild" ? this._t("rebuildRunning") : this._t("rebuild")}</button>
+            <small>${this._t("rebuildDescription")}</small>
+          </div>
         </div>
         <div class="history-toolbar">
           <select id="history-type"><option value="all">${this._t("allTypes")}</option>${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((type) => `<option value="${type}" ${this._historyType === type ? "selected" : ""}>${this._typeLabel(type)}</option>`).join("")}</select>
@@ -1001,39 +1109,49 @@ class RentalConsumptionPanel extends HTMLElement {
   }
   _analysisSummary(analysis, heating) {
     const coverage = heating ? analysis?.temperature_coverage : analysis?.coverage;
+    const uniformHeating = heating && analysis?.configured_distribution === "uniform_daily";
+    const coverageText = uniformHeating ? this._t("coverageNotRequired") : this._coverageText(coverage);
+    const sourceText = uniformHeating ? this._t("notRequired") : (heating ? (analysis?.outdoor_temperature_sensor || "—") : (analysis?.source || "—"));
     return `<div class="analysis-mini">
       <div><span>${this._t("effectiveDistribution")} ${this._helpIcon("effectiveDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
-      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._coverageText(coverage)}</strong></div>
-      <div><span>${this._t("source")} ${!heating ? this._helpIcon("loadSourceHelp") : ""}</span><strong>${this._escape(heating ? (analysis?.outdoor_temperature_sensor || "—") : (analysis?.source || "—"))}</strong></div>
+      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._escape(coverageText)}</strong></div>
+      <div><span>${this._t("source")} ${!heating ? this._helpIcon("loadSourceHelp") : ""}</span><strong>${this._escape(sourceText)}</strong></div>
     </div>`;
   }
   _analysisDetails(analysis, heating) {
     const coverage = heating ? analysis?.temperature_coverage : analysis?.coverage;
+    const uniformHeating = heating && analysis?.configured_distribution === "uniform_daily";
+    const coverageText = uniformHeating ? this._t("coverageNotRequired") : this._coverageText(coverage);
     return `<div class="analysis-grid">
       <div><span>${this._t("configuredDistribution")} ${this._helpIcon("configuredDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.configured_distribution)}</strong></div>
       <div><span>${this._t("effectiveDistribution")} ${this._helpIcon("effectiveDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
-      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._coverageText(coverage)}</strong></div>
+      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._escape(coverageText)}</strong></div>
       <div><span>${this._t("weightedPeriods")} ${this._helpIcon("weightedPeriodsHelp")}</span><strong>${analysis?.weighted_periods || 0}</strong></div>
       <div><span>${this._t("fallbackPeriods")} ${this._helpIcon("uniformPeriodsHelp")}</span><strong>${analysis?.fallback_periods || 0}</strong></div>
-      ${heating ? `<div><span>${this._t("meanTemperature")}</span><strong>${analysis?.mean_outdoor_temperature == null ? "—" : `${this._num(analysis.mean_outdoor_temperature, 1)} °C`}</strong></div>` : `<div><span>${this._t("source")} ${this._helpIcon("loadSourceHelp")}</span><strong>${this._escape(analysis?.source || "—")}</strong></div>`}
+      ${heating ? `<div><span>${this._t("meanTemperature")}</span><strong>${uniformHeating ? this._t("notRequired") : (analysis?.mean_outdoor_temperature == null ? "—" : `${this._num(analysis.mean_outdoor_temperature, 1)} °C`)}</strong></div>` : `<div><span>${this._t("source")} ${this._helpIcon("loadSourceHelp")}</span><strong>${this._escape(analysis?.source || "—")}</strong></div>`}
     </div>`;
   }
   _periodForm(entry) {
     const period = this._editingPeriodId ? entry.periods.find((item) => item.period_id === this._editingPeriodId) : null;
-    const type = period?.consumption_type || "electricity";
+    const type = period?.consumption_type || this._newPeriodType || "electricity";
     const tariff = period?.tariff_mode || "single";
     const provider = period
       ? (period.provider || "")
       : (entry.settings.grid_operator || entry.providers?.[0] || "");
+    const duration = periodDurationDays(period?.start_date || "", period?.end_date || "");
+    const unitPrice = period?.unit_price == null ? "" : this._formatInputNumber(period.unit_price, 6);
     return `<section class="card edit-card">
       <div class="section-header"><h2>${period ? this._t("editPeriod") : this._t("addPeriod")}</h2>${period ? `<button class="button subtle" data-action="cancel-edit">${this._t("cancel")}</button>` : ""}</div>
       <form id="period-form"><div class="form-grid">
         ${this._field(this._t("type"), `<select name="consumption_type" id="consumption-type">${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${this._typeLabel(item)}</option>`).join("")}</select>`)}
-        ${this._field(this._t("start"), `<input name="start_date" type="date" value="${period?.start_date || ""}" required>`)}
-        ${this._field(this._t("end"), `<input name="end_date" type="date" value="${period?.end_date || ""}" required>`)}
+        ${this._dateField(this._t("start"), "start_date", period?.start_date || "", { required: true })}
+        ${this._dateField(this._t("end"), "end_date", period?.end_date || "", { required: true, helpKey: "endIncludedHelp" })}
         ${this._field(this._t("provider"), `<input name="provider" value="${this._escape(provider)}" placeholder="${this._escape(entry.settings.grid_operator || "")}">`, { helpKey: "providerHelp", optional: true })}
-        ${this._field(this._t("consumption"), `<div class="input-unit"><input name="value" type="number" min="0.001" step="any" value="${period?.value ?? ""}" required><span id="value-unit">${this._escape(entry.units[type])}</span></div>`)}
-        ${this._field(this._t("totalCost"), `<div class="input-unit"><input name="cost" type="number" min="0" step="any" value="${period?.cost ?? ""}"><span>${this._escape(entry.units.currency)}</span></div>`)}
+        <div class="period-duration wide"><span>${this._t("periodDuration")}: <strong id="period-duration-value">${duration == null ? "—" : `${duration} ${this._t("daysLong")}`}</strong></span><small>${this._t("endIncludedHelp")}</small></div>
+        ${this._field(this._t("consumption"), `<div class="input-unit"><input id="period-value" name="value" type="number" min="0.001" step="any" value="${period?.value ?? ""}" required><span id="value-unit">${this._escape(entry.units[type])}</span></div>`)}
+        ${this._field(this._t("totalCost"), `<div class="input-unit"><input id="period-cost" name="cost" type="number" min="0" step="any" value="${period?.cost ?? ""}"><span>${this._escape(entry.units.currency)}</span></div>`, { optional: true })}
+        ${this._field(this._t("unitPriceInput"), `<div class="input-unit"><input id="period-unit-price" name="unit_price_ui" type="number" min="0" step="any" value="${unitPrice}"><span id="unit-price-unit">${this._escape(entry.units.unit_prices[type])}</span></div>`, { optional: true })}
+        <div class="help wide pricing-help">${this._t("costPriceHelp")}</div>
         <label id="tariff-field">${this._fieldLabel(this._t("tariff"), "singleTariffHelp")}<select name="tariff_mode" id="tariff-mode"><option value="single" ${tariff === "single" ? "selected" : ""}>${this._t("single")}</option><option value="peak_offpeak" ${tariff === "peak_offpeak" ? "selected" : ""}>${this._t("peakOffpeak")}</option></select></label>
         <div id="dual-tariff" class="tariff-grid wide ${tariff === "peak_offpeak" && type === "electricity" ? "" : "hidden"}">
           ${this._field(this._t("peakConsumption"), `<input name="peak_value" type="number" min="0" step="any" value="${period?.peak_value ?? ""}">`)}
@@ -1047,6 +1165,73 @@ class RentalConsumptionPanel extends HTMLElement {
     </section>`;
   }
 
+  _dateField(label, name, value, options = {}) {
+    return `<label>${this._fieldLabel(label, options.helpKey || null, options)}<div class="date-picker-wrap"><ha-date-input data-date-name="${name}" data-value="${this._escape(value)}" data-required="${options.required ? "1" : "0"}"></ha-date-input><input class="date-picker-fallback" data-date-fallback="${name}" type="date" value="${this._escape(value)}" ${options.required ? "required" : ""}><input type="hidden" name="${name}" value="${this._escape(value)}"></div></label>`;
+  }
+
+  _formatInputNumber(value, decimals = 6) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "";
+    return number.toFixed(decimals).replace(/\.?0+$/, "");
+  }
+
+  _updatePeriodDuration() {
+    const start = this.shadowRoot.querySelector('input[type="hidden"][name="start_date"]')?.value || "";
+    const end = this.shadowRoot.querySelector('input[type="hidden"][name="end_date"]')?.value || "";
+    const days = periodDurationDays(start, end);
+    const target = this.shadowRoot.querySelector("#period-duration-value");
+    if (target) target.textContent = days == null ? "—" : `${days} ${this._t("daysLong")}`;
+  }
+
+  _syncPeriodPricing(driver = this._priceDriver) {
+    const consumption = this.shadowRoot.querySelector("#period-value");
+    const cost = this.shadowRoot.querySelector("#period-cost");
+    const unitPrice = this.shadowRoot.querySelector("#period-unit-price");
+    if (!consumption || !cost || !unitPrice) return;
+    if (driver === "unit_price") {
+      const calculated = calculateTotalCost(consumption.value, unitPrice.value);
+      if (calculated != null) cost.value = this._formatInputNumber(calculated, 2);
+      else if (!unitPrice.value || !(Number(consumption.value) > 0)) cost.value = "";
+    } else {
+      const calculated = calculateUnitPrice(consumption.value, cost.value);
+      if (calculated != null) unitPrice.value = this._formatInputNumber(calculated, 6);
+      else if (!cost.value || !(Number(consumption.value) > 0)) unitPrice.value = "";
+    }
+  }
+
+  _setupDatePickers() {
+    const bindFallbacks = () => {
+      this.shadowRoot.querySelectorAll("[data-date-fallback]").forEach((fallback) => {
+        if (fallback.dataset.bound === "1") return;
+        fallback.dataset.bound = "1";
+        fallback.addEventListener("change", () => {
+          const hidden = this.shadowRoot.querySelector(`input[type="hidden"][name="${fallback.dataset.dateFallback}"]`);
+          if (hidden) hidden.value = fallback.value || "";
+          this._updatePeriodDuration();
+        });
+      });
+    };
+    bindFallbacks();
+    customElements.whenDefined("ha-date-input").then(() => {
+      this.shadowRoot.querySelectorAll("ha-date-input[data-date-name]").forEach((picker) => {
+        if (!picker.isConnected || picker.dataset.bound === "1") return;
+        picker.dataset.bound = "1";
+        picker.locale = this._hass?.locale;
+        picker.value = picker.dataset.value || "";
+        picker.required = picker.dataset.required === "1";
+        const fallback = picker.parentElement?.querySelector(`[data-date-fallback="${picker.dataset.dateName}"]`);
+        if (fallback) fallback.classList.add("hidden");
+        picker.addEventListener("value-changed", (event) => {
+          const value = event.detail?.value || "";
+          const hidden = this.shadowRoot.querySelector(`input[type="hidden"][name="${picker.dataset.dateName}"]`);
+          if (hidden) hidden.value = value;
+          if (fallback) fallback.value = value;
+          this._updatePeriodDuration();
+        });
+      });
+    });
+  }
+
   _field(label, control, options = {}) {
     return `<label>${this._fieldLabel(label, options.helpKey || null, options)}${control}</label>`;
   }
@@ -1057,7 +1242,7 @@ class RentalConsumptionPanel extends HTMLElement {
       <div class="period-main"><div class="type-icon">${period.consumption_type === "electricity" ? "⚡" : period.consumption_type === "pv_electricity" ? "☀️" : period.consumption_type === "heating" ? "♨" : "💧"}</div><div><strong>${this._typeLabel(period.consumption_type)}</strong><span>${this._date(period.start_date)} – ${this._date(period.end_date)} · ${period.days} ${this._t("daysShort")}</span><small class="provider-line">${this._escape(period.provider || this._t("noProvider"))}</small></div></div>
       <div class="metric"><span>${this._t("consumption")}</span><strong>${this._num(period.value, 3)} ${this._escape(entry.units[period.consumption_type])}</strong><small>${this._num(period.daily_average, 3)}${this._t("perDay")}</small></div>
       <div class="metric"><span>${this._t("totalCost")}</span><strong>${period.cost == null ? "—" : `${this._num(period.cost, 2)} ${this._escape(entry.units.currency)}`}</strong><small>${period.unit_price == null ? "—" : `${this._num(period.unit_price, 4)} ${this._escape(entry.units.unit_prices[period.consumption_type])}`}</small></div>
-      <div class="badges">${period.consumption_type === "electricity" ? `<span class="badge" title="${this._escape(period.tariff_mode === "single" ? this._t("singleTariffHelp") : this._t("tariffHelp"))}">${this._tariffLabel(period.tariff_mode)}</span>` : ""}<span class="badge" title="${this._escape(this._t("loadCurveHelp"))}">${this._distributionLabel(analysis.distribution || "uniform_daily")}</span>${analysis.source ? `<span class="badge accent" title="${this._escape(this._t("loadSourceHelp"))}">${this._escape(analysis.source)}</span>` : ""}${coverage != null ? `<span class="badge" title="${this._escape(this._t("coverageHelp"))}">${this._num(coverageToPercent(coverage), 0)}%</span>` : ""}</div>
+      <div class="badges">${period.consumption_type === "electricity" ? `<span class="badge" title="${this._escape(period.tariff_mode === "single" ? this._t("singleTariffHelp") : this._t("tariffHelp"))}">${this._t("badgeTariff")} : ${this._tariffLabel(period.tariff_mode)}</span>` : ""}<span class="badge" title="${this._escape(this._t("loadCurveHelp"))}">${this._t("badgeMethod")} : ${this._distributionLabel(analysis.distribution || "uniform_daily")}</span>${analysis.source ? `<span class="badge accent" title="${this._escape(this._t("loadSourceHelp"))}">${this._t("badgeSource")} : ${this._escape(analysis.source)}</span>` : ""}${coverage != null ? `<span class="badge" title="${this._escape(this._t("coverageHelp"))}">${this._t("badgeData")} : ${this._num(coverageToPercent(coverage), 0)}%</span>` : ""}</div>
       <div class="period-actions"><button class="button compact" data-action="edit" data-id="${period.period_id}">${this._t("edit")}</button><button class="button danger compact" data-action="delete" data-id="${period.period_id}">${this._t("delete")}</button></div>
       ${period.tariff_mode === "peak_offpeak" ? `<div class="tariff-detail"><span>${this._t("peakLabel")}: <b>${this._num(period.peak_value, 3)} kWh</b>${period.peak_cost != null ? ` · ${this._num(period.peak_cost, 2)} ${entry.units.currency}` : ""}</span><span>${this._t("offpeakLabel")}: <b>${this._num(period.offpeak_value, 3)} kWh</b>${period.offpeak_cost != null ? ` · ${this._num(period.offpeak_cost, 2)} ${entry.units.currency}` : ""}</span></div>` : ""}
       ${period.note ? `<div class="period-note">${this._escape(period.note)}</div>` : ""}
@@ -1130,6 +1315,17 @@ class RentalConsumptionPanel extends HTMLElement {
     }));
     this.shadowRoot.querySelector('[data-action="open-settings"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._render(); });
     this.shadowRoot.querySelector('[data-action="open-settings-advanced"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._advancedSettingsOpen = true; this._render(); });
+    this.shadowRoot.querySelectorAll('[data-action="add-period-type"]').forEach((button) => button.addEventListener("click", () => {
+      this._newPeriodType = button.dataset.type || "electricity";
+      this._editingPeriodId = null;
+      this._activeTab = "periods";
+      this._render();
+      this.shadowRoot.querySelector(".edit-card")?.scrollIntoView({ behavior: "smooth" });
+    }));
+    this.shadowRoot.querySelector('[data-action="setup-apartment"]')?.addEventListener("click", () => { this._apartmentDialog = "add"; this._render(); });
+    this.shadowRoot.querySelector('[data-action="setup-settings"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._render(); });
+    this.shadowRoot.querySelector('[data-action="setup-period"]')?.addEventListener("click", () => { this._newPeriodType = "electricity"; this._activeTab = "periods"; this._render(); });
+    this.shadowRoot.querySelector('[data-action="setup-export"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._advancedSettingsOpen = true; this._render(); });
     this.shadowRoot.querySelector('[data-action="toggle-advanced"]')?.addEventListener("click", (event) => {
       this._advancedSettingsOpen = !this._advancedSettingsOpen;
       this.shadowRoot.querySelector("#advanced-settings-content")?.classList.toggle("hidden", !this._advancedSettingsOpen);
@@ -1156,12 +1352,13 @@ class RentalConsumptionPanel extends HTMLElement {
     this.shadowRoot.querySelector("#export-backend")?.addEventListener("change", () => this._updateExportFields());
     this.shadowRoot.querySelector("#consumption-type")?.addEventListener("change", (event) => this._periodTypeChanged(event.target.value));
     this.shadowRoot.querySelector("#tariff-mode")?.addEventListener("change", () => this._periodTypeChanged(this.shadowRoot.querySelector("#consumption-type")?.value));
-    this.shadowRoot.querySelector('[data-action="cancel-edit"]')?.addEventListener("click", () => { this._editingPeriodId = null; this._render(); });
+    this.shadowRoot.querySelector('[data-action="cancel-edit"]')?.addEventListener("click", () => { this._editingPeriodId = null; this._newPeriodType = null; this._render(); });
     this.shadowRoot.querySelector('[data-action="rebuild"]')?.addEventListener("click", () => this._rebuild());
     this.shadowRoot.querySelector('[data-action="test-export"]')?.addEventListener("click", () => this._testExport());
     this.shadowRoot.querySelector('[data-action="sync-export"]')?.addEventListener("click", () => this._syncExport());
     this.shadowRoot.querySelectorAll('[data-action="edit"]').forEach((button) => button.addEventListener("click", () => {
       this._editingPeriodId = button.dataset.id;
+      this._newPeriodType = null;
       this._message = null;
       this._render();
       this.shadowRoot.querySelector(".edit-card")?.scrollIntoView({ behavior: "smooth" });
@@ -1177,6 +1374,10 @@ class RentalConsumptionPanel extends HTMLElement {
       if (hidden) hidden.value = field.value;
       this._markDirty("settings");
     }));
+    this.shadowRoot.querySelector("#period-cost")?.addEventListener("input", () => { this._priceDriver = "cost"; this._syncPeriodPricing("cost"); });
+    this.shadowRoot.querySelector("#period-unit-price")?.addEventListener("input", () => { this._priceDriver = "unit_price"; this._syncPeriodPricing("unit_price"); });
+    this.shadowRoot.querySelector("#period-value")?.addEventListener("input", () => this._syncPeriodPricing(this._priceDriver));
+    this._setupDatePickers();
     this._periodTypeChanged(this.shadowRoot.querySelector("#consumption-type")?.value);
     this._updateExportFields();
     this._setupEntityPickers();
@@ -1186,18 +1387,26 @@ class RentalConsumptionPanel extends HTMLElement {
     const entry = this._entry;
     const unit = this.shadowRoot.querySelector("#value-unit");
     if (unit && entry) unit.textContent = entry.units[type];
+    const unitPriceUnit = this.shadowRoot.querySelector("#unit-price-unit");
+    if (unitPriceUnit && entry) unitPriceUnit.textContent = entry.units.unit_prices[type];
     const tariffField = this.shadowRoot.querySelector("#tariff-field");
     if (tariffField) tariffField.classList.toggle("hidden", type !== "electricity");
     const dual = this.shadowRoot.querySelector("#dual-tariff");
     if (dual) dual.classList.toggle("hidden", type !== "electricity" || this.shadowRoot.querySelector("#tariff-mode")?.value !== "peak_offpeak");
     if (!this._editingPeriodId) {
-      const start = this.shadowRoot.querySelector('input[name="start_date"]');
+      const start = this.shadowRoot.querySelector('input[type="hidden"][name="start_date"]');
       if (start && !start.value) {
         const dates = entry.periods.filter((period) => period.consumption_type === type).map((period) => period.end_date).sort();
         if (dates.length) {
           const date = new Date(`${dates.at(-1)}T12:00:00`);
           date.setDate(date.getDate() + 1);
-          start.value = date.toISOString().slice(0, 10);
+          const value = date.toISOString().slice(0, 10);
+          start.value = value;
+          const picker = this.shadowRoot.querySelector('ha-date-input[data-date-name="start_date"]');
+          if (picker) picker.value = value;
+          const fallback = this.shadowRoot.querySelector('[data-date-fallback="start_date"]');
+          if (fallback) fallback.value = value;
+          this._updatePeriodDuration();
         }
       }
     }
@@ -1283,6 +1492,8 @@ class RentalConsumptionPanel extends HTMLElement {
       const updated = await this._hass.callWS(payload);
       this._replaceEntry(updated);
       this._editingPeriodId = null;
+      this._newPeriodType = null;
+      this._priceDriver = "cost";
       this._message = { kind: "success", text: this._t(edit ? "editSuccess" : "addSuccess") };
     });
   }
@@ -1397,7 +1608,9 @@ class RentalConsumptionPanel extends HTMLElement {
   }
 
   async _deletePeriod(id) {
-    if (!confirm(this._t("confirmDelete"))) return;
+    const period = this._entry?.periods?.find((item) => item.period_id === id);
+    const detail = period ? `\n\n${this._typeLabel(period.consumption_type)} · ${this._date(period.start_date)} – ${this._date(period.end_date)} · ${this._num(period.value, 3)} ${this._escape(this._entry.units[period.consumption_type])}` : "";
+    if (!confirm(`${this._t("confirmDelete")}${detail}`)) return;
     await this._run("delete-period", async () => {
       const updated = await this._hass.callWS({ type: "rental_consumption/delete_period", entry_id: this._entry.entry_id, period_id: id });
       this._replaceEntry(updated);
@@ -1406,7 +1619,7 @@ class RentalConsumptionPanel extends HTMLElement {
   }
 
   async _rebuild() {
-    if (!confirm(this._t("confirmRebuild"))) return;
+    if (!confirm(`${this._t("recorderRebuildConfirm")}\n\n${this._t("rebuildDescription")}`)) return;
     await this._run("rebuild", async () => {
       const updated = await this._hass.callWS({ type: "rental_consumption/rebuild_statistics", entry_id: this._entry.entry_id });
       this._replaceEntry(updated);
@@ -1452,10 +1665,10 @@ class RentalConsumptionPanel extends HTMLElement {
       .settings-card h2{margin-bottom:16px}.sticky-actions{position:sticky;bottom:8px;z-index:3;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--card-background-color) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--divider-color);margin-bottom:16px}.export-status{margin-top:18px;padding:14px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.compact-status{margin-top:8px}.status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--disabled-text-color,#888)}.status-dot.ok{background:var(--success-color,#43a047)}.status-dot.error{background:var(--error-color,#db4437)}.status-dot.testing{background:var(--warning-color,#ff9800)}.status-message{margin-top:8px;color:var(--secondary-text-color);font-size:12px;word-break:break-word}.status-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.step{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--card-background-color);border:1px solid var(--divider-color)}.step.ok{color:var(--success-color,#43a047)}.step.error{color:var(--error-color,#db4437)}
 
       .field-label{display:flex!important;align-items:center;gap:6px!important;min-height:20px}.required-marker{color:var(--error-color,#db4437);margin-left:3px}.optional-marker{margin-left:6px;color:var(--secondary-text-color);font-size:11px;font-weight:400}.help-icon{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:11px;font-weight:700;cursor:help;flex:0 0 auto}.help-icon::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:320px;padding:8px 10px;border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,0 4px 12px rgba(0,0,0,.25));font-size:12px;font-weight:400;line-height:1.35;opacity:0;visibility:hidden;pointer-events:none;z-index:50;white-space:normal}.help-icon:hover::after,.help-icon:focus::after{opacity:1;visibility:visible}.entity-picker-wrap{display:grid;gap:5px}.entity-picker-wrap ha-entity-picker{width:100%}.entity-picker-fallback{display:none}.entity-picker-wrap ha-entity-picker:not(:defined){display:none}.entity-picker-wrap ha-entity-picker:not(:defined)+.entity-picker-fallback{display:block}.advanced-toggle-card{padding:14px 20px}.advanced-toggle{padding-left:0}.advanced-content{padding-top:14px;border-top:1px solid var(--divider-color);margin-top:10px}.backend-options{margin-top:14px;padding:12px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.backend-options summary{cursor:pointer;font-weight:600;color:var(--primary-text-color);margin-bottom:12px}.options-grid{margin-top:12px}.unsaved-warning{margin:10px 0;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning-color,#ff9800) 12%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));color:var(--primary-text-color);font-size:13px}.message-action,.status-action{margin-top:8px;font-size:13px}.technical-details{margin-top:10px}.technical-details summary{cursor:pointer;color:var(--secondary-text-color);font-size:12px}.technical-details pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:11px;max-height:180px;overflow:auto}.context-alert{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;border-radius:10px;border:1px solid var(--divider-color);background:var(--card-background-color);font-size:13px}.context-alert>div>div{margin-top:4px;color:var(--secondary-text-color)}.warning-alert{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));background:color-mix(in srgb,var(--warning-color,#ff9800) 9%,var(--card-background-color))}.error-alert{border-color:color-mix(in srgb,var(--error-color,#db4437) 55%,var(--divider-color));background:color-mix(in srgb,var(--error-color,#db4437) 8%,var(--card-background-color))}.action-description{margin-top:8px;color:var(--secondary-text-color);font-size:12px;text-align:right}.status-dot.warning{background:var(--warning-color,#ff9800)}.status-dot.neutral{background:var(--disabled-text-color,#888)}.export-status.level-warning{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 50%,var(--divider-color))}.export-status.level-error{border-color:color-mix(in srgb,var(--error-color,#db4437) 50%,var(--divider-color))}.export-status.level-ok{border-color:color-mix(in srgb,var(--success-color,#43a047) 45%,var(--divider-color))}.status-steps .step{font-size:12px}.status-message{font-size:13px!important;color:var(--primary-text-color)!important}
-      .modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:0 18px 55px rgba(0,0,0,.32)}.modal-card .section-header{margin-bottom:16px}
+      .setup-card{border-color:color-mix(in srgb,var(--primary-color) 35%,var(--divider-color))}.setup-card p{margin:5px 0 0}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.setup-step{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.setup-step.done{opacity:.82}.setup-check{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--divider-color);font-weight:700}.setup-step.done .setup-check{color:var(--success-color,#43a047);border-color:color-mix(in srgb,var(--success-color,#43a047) 60%,var(--divider-color))}.setup-step.pending .setup-check{color:var(--warning-color,#ff9800)}.setup-step strong,.setup-step small{display:block}.setup-step small,.setup-done{color:var(--secondary-text-color);font-size:12px}.empty-summary{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}.empty-summary .empty-title{font-size:14px}.inline-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;color:var(--secondary-text-color);font-size:13px}.warning-inline{color:var(--primary-text-color)}.period-duration{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px}.period-duration small{color:var(--secondary-text-color)}.date-picker-wrap{display:grid;gap:4px}.date-picker-wrap ha-date-input{width:100%}.date-picker-fallback{width:100%}.pricing-help{margin-top:-4px}.recorder-action{display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:430px}.recorder-action small{color:var(--secondary-text-color);font-size:12px;text-align:right;line-height:1.35}.button[aria-busy="true"]{opacity:.72}.modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:0 18px 55px rgba(0,0,0,.32)}.modal-card .section-header{margin-bottom:16px}
       .hidden{display:none!important}
-      @media(max-width:1100px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
-      @media(max-width:700px){main{padding:14px 10px 40px}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
+      @media(max-width:1100px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
+      @media(max-width:700px){main{padding:14px 10px 40px}.setup-steps{grid-template-columns:1fr}.setup-step{grid-template-columns:auto 1fr}.setup-step .button,.setup-done{grid-column:2}.inline-empty{align-items:flex-start;flex-direction:column}.period-duration{align-items:flex-start;flex-direction:column}.recorder-action{align-items:flex-start;max-width:none;width:100%}.recorder-action small{text-align:left}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
     `;
   }
 }

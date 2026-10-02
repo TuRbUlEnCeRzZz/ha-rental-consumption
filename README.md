@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focuses on UX reliability, contextual help and a simpler Settings experience.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focused on UX reliability, contextual help and a simpler Settings experience. Version 1.6.2 improves first-run guidance, empty states and billing-period entry workflows.
 
 ## Highlights
 
@@ -51,6 +51,27 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 6. Search for **Rental Consumption**.
 
 
+
+
+## What changed in v1.6.2
+
+### First-run guidance and empty states
+
+The Overview tab now avoids presenting missing data as zero consumption. When no period exists for a consumption type, the card shows **No period entered** and offers a direct **Add a period** action with the correct type preselected.
+
+A lightweight getting-started checklist is shown while the dwelling configuration is incomplete. It tracks the dwelling, incoming-power sensor when relevant, first billing period and external-database verification when one is configured. Each incomplete step links to the relevant screen.
+
+Heating diagnostics now distinguish between missing data and configuration choices. When heating is deliberately distributed uniformly, temperature coverage is shown as **Not required** instead of a misleading `0 %`.
+
+### Better billing-period form
+
+Billing dates now use Home Assistant's native `ha-date-input` when available, so the visible date format follows the Home Assistant locale. The end date is explicitly described as inclusive, and the form calculates the billing-period duration immediately (for example `92 days`).
+
+Cost entry is bidirectional: users may enter either the total billed cost or the unit price. The other value is calculated automatically in the frontend while the stored backend model remains unchanged.
+
+History badges now use explicit labels for tariff, allocation method, source and data coverage instead of relying on terse implementation-oriented values. Delete confirmation includes the selected period details. Recorder reconstruction now has a visible explanation, confirmation and in-progress state.
+
+No backend storage migration is required for v1.6.2.
 
 ## What changed in v1.6.1
 
@@ -543,8 +564,7 @@ After updating:
 
 ## Roadmap
 
-- **v1.6.2**: empty states, first-run checklist, period-entry UX and Recorder action feedback.
-- **v1.6.3**: Overview/Analysis UX, accessibility/mobile polish, additional charts, and previous/next period arrows in the Analysis tab.
+- **v1.6.3**: Overview/Analysis UX, accessibility/mobile polish, additional charts, shared time-scope selection (all data / year / billing period / custom range), and previous/next period arrows in the Analysis tab.
 - **v1.7.0**: deeper analytical quality and N/N-1 comparisons.
 
 ## Data and backups
