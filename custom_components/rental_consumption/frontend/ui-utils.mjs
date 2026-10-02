@@ -201,3 +201,94 @@ export function adjacentPeriodIds(periods = [], selectedId = null) {
     current: sorted[index].period_id,
   };
 }
+
+export function shiftIsoDateYears(value, years = -1) {
+  if (!validIsoDate(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const targetYear = year + Number(years || 0);
+  const maxDay = new Date(Date.UTC(targetYear, month, 0)).getUTCDate();
+  const safeDay = Math.min(day, maxDay);
+  return `${String(targetYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+}
+
+export function previousYearRange(range) {
+  if (!range?.start || !range?.end) return null;
+  const start = shiftIsoDateYears(range.start, -1);
+  const end = shiftIsoDateYears(range.end, -1);
+  if (!start || !end) return null;
+  return { start, end, scope: "previous_year" };
+}
+
+export function expectedRangeDays(range) {
+  if (!range?.start || !range?.end) return 0;
+  return periodDurationDays(range.start, range.end) || 0;
+}
+
+export function dataCoverage(rows = [], range = null) {
+  if (!range) return 0;
+  const expected = expectedRangeDays(range);
+  if (!expected) return 0;
+  const dates = new Set(filterDailyRows(rows, range.start, range.end).map((row) => row.date || row.key));
+  return Math.min(1, dates.size / expected);
+}
+
+export function compareSummaries(current, previous) {
+  const pct = (a, b) => {
+    const currentValue = Number(a);
+    const previousValue = Number(b);
+    if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue) || previousValue === 0) return null;
+    return (currentValue - previousValue) / previousValue * 100;
+  };
+  return {
+    consumption_pct: pct(current?.consumption, previous?.consumption),
+    daily_average_pct: pct(current?.dailyAverage, previous?.dailyAverage),
+    cost_pct: pct(current?.cost, previous?.cost),
+    unit_price_pct: pct(current?.unitPrice, previous?.unitPrice),
+    cost_per_day_pct: pct(current?.costPerDay, previous?.costPerDay),
+  };
+}
+
+export function comparisonQuality(currentCoverage, previousCoverage) {
+  const current = clamp(currentCoverage, 0, 1);
+  const previous = clamp(previousCoverage, 0, 1);
+  const minimum = Math.min(current, previous);
+  if (minimum >= 0.95) return "excellent";
+  if (minimum >= 0.8) return "good";
+  if (minimum >= 0.5) return "partial";
+  return "insufficient";
+}
+
+export function notableVariation(changePct, moderate = 10, strong = 20) {
+  const value = Number(changePct);
+  if (!Number.isFinite(value)) return "unknown";
+  const absolute = Math.abs(value);
+  if (absolute + 1e-9 >= strong) return "strong";
+  if (absolute + 1e-9 >= moderate) return "moderate";
+  return "stable";
+}
+
+export function summarizeDegreeDays(rows = []) {
+  const safe = (rows || []).filter((row) => Number.isFinite(Number(row.degree_days)));
+  if (!safe.length) return { degreeDays: null, consumptionPer100DegreeDays: null };
+  const degreeDays = safe.reduce((sum, row) => sum + Math.max(0, Number(row.degree_days)), 0);
+  const consumption = safe.reduce((sum, row) => sum + Number(row.consumption || 0), 0);
+  return {
+    degreeDays,
+    consumptionPer100DegreeDays: degreeDays > 0 ? consumption / degreeDays * 100 : null,
+  };
+}
+
+export function alignPreviousYearMonthlyRows(currentRows = [], previousRows = []) {
+  const current = aggregateDailyRows(currentRows, "monthly");
+  const previous = aggregateDailyRows(previousRows, "monthly");
+  const previousMap = new Map(previous.map((row) => {
+    const [year, month] = String(row.key).split("-");
+    return [`${Number(year) + 1}-${month}`, row];
+  }));
+  return current.map((row) => ({
+    key: row.key,
+    label: row.label,
+    current: row,
+    previous: previousMap.get(row.key) || null,
+  }));
+}

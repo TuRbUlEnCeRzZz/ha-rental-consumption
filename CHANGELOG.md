@@ -1,24 +1,33 @@
 # Changelog
 
+## 1.7.0 — 2026-10-02
+
+- Added exact N/N-1 comparison for year, billing-period and custom-range scopes.
+- N/N-1 uses the same reconstructed daily rows as Recorder, including partial billing periods.
+- Added comparison coverage for the current and previous-year ranges.
+- Added comparison-quality levels: Excellent, Good, Partial and Insufficient.
+- Added N/N-1 KPIs for total consumption, consumption/day, total cost, unit price and cost/day.
+- Added an aligned monthly N/N-1 comparison chart.
+- Added deterministic analytical insight text for notable consumption, cost and price changes.
+- Added PV-share N/N-1 comparison in percentage points when grid/PV data are available.
+- Added heating degree-day exposure to analytical daily rows.
+- Added weather-normalized heating comparison in consumption per 100 degree days.
+- Added frontend unit tests for calendar-year shifting, leap-day handling, data coverage, comparison quality, N/N-1 metrics and degree-day normalization.
+- Kept all analysis dependency-free and based on Home Assistant/Recorder reconstruction data.
+- No storage or Recorder migration required.
+
 ## 1.6.3 — 2026-10-02
 
-- Added one shared time-scope selector to Overview and Analysis: all data, year, billing period, or custom range.
-- Added exact custom-range calculations from daily reconstructed values instead of approximating partial months or billing periods.
-- Added previous/next billing-period arrows in Analysis when the billing-period scope is selected.
-- Kept the selected time scope shared while switching between Overview and Analysis.
-- Recalculated Overview totals, costs and average unit prices from the selected range.
-- Added the selected covered date range and day count to Overview and Analysis.
-- Added an Overview bar chart for grid-electricity consumption by billing period.
-- Changed the Analysis main chart to bars for billing-period granularity and lines for monthly/annual trends.
-- Added selection-level KPIs for total consumption, normalized daily use, total cost, unit price and cost per day.
-- Kept period-to-previous-period percentage badges when a single billing period is selected.
-- Added a deterministic natural-language summary for the current Analysis selection.
-- Filtered the grid/PV supply mix using the exact same selected date range.
-- Added progressive use of Home Assistant `ha-chart-base` when already available, with the existing dependency-free SVG renderer retained as a fallback.
-- Increased small-label readability and removed hard-coded UI color fallbacks so the panel relies on Home Assistant theme variables.
-- Improved mobile layout for time-scope controls and period navigation.
-- Added daily analytical rows to the existing analysis payload; this is not a storage migration and uses the same weighting as Recorder.
-- Added tests for time-scope resolution, exact partial-range totals, daily aggregation and previous/next period navigation.
+- Added a shared time scope across Overview and Analysis: all data, year, billing period and custom range.
+- Added exact partial-range calculation from reconstructed daily rows rather than whole-period approximation.
+- Added previous/next billing-period arrows in Analysis.
+- Added filtered Overview totals and covered-range labels.
+- Added an Overview electricity consumption-by-period graph.
+- Added Home Assistant `ha-chart-base` use when available, with lightweight SVG fallback.
+- Added deterministic selection narrative and filtered KPI calculations.
+- Improved responsive/mobile behavior and accessibility.
+- Kept the Home Assistant theme-variable-only visual approach.
+
 
 ## 1.6.2 — 2026-10-02
 

@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Mapping
 
-from .const import CONSUMPTION_TYPES, TYPE_ELECTRICITY, TYPE_PV_ELECTRICITY
+from .const import CONSUMPTION_TYPES, TYPE_ELECTRICITY, TYPE_HEATING, TYPE_PV_ELECTRICITY
 from .models import ConsumptionPeriod, distribute_total
 
 
@@ -26,6 +26,8 @@ def _bucket_label(key: str, granularity: str) -> str:
 def _daily_rows(
     periods: list[ConsumptionPeriod],
     weights_by_period: Mapping[str, Mapping[date, float]] | None,
+    *,
+    include_degree_days: bool = False,
 ) -> list[dict[str, Any]]:
     """Return exact daily reconstructed values with their source period."""
     rows: list[dict[str, Any]] = []
@@ -52,29 +54,32 @@ def _daily_rows(
 
         for day, amount in daily_consumption:
             cost = daily_cost.get(day) if period.cost is not None else None
-            rows.append(
-                {
-                    "key": day.isoformat(),
-                    "label": day.strftime("%d/%m/%Y"),
-                    "date": day.isoformat(),
-                    "period_id": period.period_id,
-                    "period_start_date": period.start_date.isoformat(),
-                    "period_end_date": period.end_date.isoformat(),
-                    "period_label": (
-                        f"{period.start_date:%d/%m/%Y}–"
-                        f"{period.end_date:%d/%m/%Y}"
-                    ),
-                    "consumption": amount,
-                    "cost": cost,
-                    "priced_consumption": amount if cost is not None else 0.0,
-                    "unit_price": (
-                        (cost / amount)
-                        if cost is not None and amount > 0
-                        else None
-                    ),
-                    "provider": period.provider,
-                }
-            )
+            row = {
+                "key": day.isoformat(),
+                "label": day.strftime("%d/%m/%Y"),
+                "date": day.isoformat(),
+                "period_id": period.period_id,
+                "period_start_date": period.start_date.isoformat(),
+                "period_end_date": period.end_date.isoformat(),
+                "period_label": (
+                    f"{period.start_date:%d/%m/%Y}–"
+                    f"{period.end_date:%d/%m/%Y}"
+                ),
+                "consumption": amount,
+                "cost": cost,
+                "priced_consumption": amount if cost is not None else 0.0,
+                "unit_price": (
+                    (cost / amount)
+                    if cost is not None and amount > 0
+                    else None
+                ),
+                "provider": period.provider,
+            }
+            if include_degree_days and weights is not None:
+                weight = weights.get(day)
+                if weight is not None:
+                    row["degree_days"] = max(0.0, float(weight))
+            rows.append(row)
     return rows
 
 
@@ -198,7 +203,11 @@ def build_analysis_payload(
         ]
         period_rows = _period_rows(selected)
         weights = weights_by_type.get(consumption_type)
-        daily = _daily_rows(selected, weights)
+        daily = _daily_rows(
+            selected,
+            weights,
+            include_degree_days=consumption_type == TYPE_HEATING,
+        )
         types[consumption_type] = {
             "unit": units[consumption_type],
             "currency": currency,

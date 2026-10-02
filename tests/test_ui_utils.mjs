@@ -14,6 +14,14 @@ import {
   percentToCoverage,
   periodDurationDays,
   summarizeDailyRows,
+  shiftIsoDateYears,
+  previousYearRange,
+  dataCoverage,
+  compareSummaries,
+  comparisonQuality,
+  notableVariation,
+  summarizeDegreeDays,
+  alignPreviousYearMonthlyRows,
 } from "../custom_components/rental_consumption/frontend/ui-utils.mjs";
 
 test("coverage is shown as a percentage and converted back", () => {
@@ -109,4 +117,61 @@ test("period navigation exposes previous and next period IDs", () => {
   ];
   assert.deepEqual(adjacentPeriodIds(periods, "b"), { previous: "a", next: "c", current: "b" });
   assert.deepEqual(adjacentPeriodIds(periods, "a"), { previous: null, next: "b", current: "a" });
+});
+
+
+test("previous-year range keeps calendar alignment and clamps leap day", () => {
+  assert.equal(shiftIsoDateYears("2024-02-29", -1), "2023-02-28");
+  assert.deepEqual(previousYearRange({ start: "2026-05-01", end: "2026-07-31" }), { start: "2025-05-01", end: "2025-07-31", scope: "previous_year" });
+});
+
+test("comparison coverage measures exact covered calendar days", () => {
+  const rows = [
+    { date: "2026-01-01", consumption: 1 },
+    { date: "2026-01-02", consumption: 1 },
+    { date: "2026-01-04", consumption: 1 },
+  ];
+  assert.equal(dataCoverage(rows, { start: "2026-01-01", end: "2026-01-04" }), 0.75);
+  assert.equal(comparisonQuality(1, 0.98), "excellent");
+  assert.equal(comparisonQuality(0.9, 0.85), "good");
+  assert.equal(comparisonQuality(0.75, 0.9), "partial");
+  assert.equal(comparisonQuality(0.4, 1), "insufficient");
+});
+
+test("year-over-year summary compares consumption, daily use, cost, price and cost per day", () => {
+  const current = { consumption: 90, dailyAverage: 9, cost: 27, unitPrice: 0.3, costPerDay: 2.7 };
+  const previous = { consumption: 100, dailyAverage: 10, cost: 25, unitPrice: 0.25, costPerDay: 2.5 };
+  const changes = compareSummaries(current, previous);
+  assert.equal(changes.consumption_pct, -10);
+  assert.equal(changes.daily_average_pct, -10);
+  assert.equal(changes.cost_pct, 8);
+  assert.ok(Math.abs(changes.unit_price_pct - 20) < 1e-9);
+  assert.ok(Math.abs(changes.cost_per_day_pct - 8) < 1e-9);
+  assert.equal(notableVariation(changes.unit_price_pct), "strong");
+  assert.equal(notableVariation(5), "stable");
+});
+
+test("heating normalization uses consumption per 100 degree days", () => {
+  const summary = summarizeDegreeDays([
+    { consumption: 10, degree_days: 5 },
+    { consumption: 20, degree_days: 15 },
+  ]);
+  assert.equal(summary.degreeDays, 20);
+  assert.equal(summary.consumptionPer100DegreeDays, 150);
+});
+
+test("previous-year monthly rows align onto the current year axis", () => {
+  const current = [
+    { date: "2026-05-01", consumption: 10, cost: 3, priced_consumption: 10 },
+    { date: "2026-06-01", consumption: 20, cost: 6, priced_consumption: 20 },
+  ];
+  const previous = [
+    { date: "2025-05-01", consumption: 12, cost: 3, priced_consumption: 12 },
+    { date: "2025-06-01", consumption: 18, cost: 5, priced_consumption: 18 },
+  ];
+  const aligned = alignPreviousYearMonthlyRows(current, previous);
+  assert.equal(aligned.length, 2);
+  assert.equal(aligned[0].key, "2026-05");
+  assert.equal(aligned[0].previous.consumption, 12);
+  assert.equal(aligned[1].current.consumption, 20);
 });

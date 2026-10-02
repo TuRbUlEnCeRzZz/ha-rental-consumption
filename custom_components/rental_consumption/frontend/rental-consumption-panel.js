@@ -11,6 +11,13 @@ import {
   summarizeDailyRows,
   aggregateDailyRows,
   adjacentPeriodIds,
+  previousYearRange,
+  dataCoverage,
+  compareSummaries,
+  comparisonQuality,
+  notableVariation,
+  summarizeDegreeDays,
+  alignPreviousYearMonthlyRows,
 } from "./ui-utils.mjs";
 
 class RentalConsumptionPanel extends HTMLElement {
@@ -352,6 +359,48 @@ class RentalConsumptionPanel extends HTMLElement {
         errorApartmentSetup: "Le logement a été créé mais son chargement dans Home Assistant a échoué.",
         errorSafeRebuild: "Cette destination ne permet pas une reconstruction sûre avec suppression.",
         errorDeleteUnsupported: "La suppression sûre n’est pas disponible pour cette destination.",
+        nn1Title: "Comparaison N / N-1",
+        nn1Help: "Compare la plage affichée avec les mêmes dates de l’année précédente, à partir des valeurs quotidiennes reconstruites.",
+        nn1Current: "Période actuelle",
+        nn1Previous: "Même période N-1",
+        nn1NoData: "Aucune donnée comparable n’est disponible pour la même période de l’année précédente.",
+        nn1ChooseRange: "Choisissez une année, une période de facturation ou une plage personnalisée pour activer la comparaison N / N-1.",
+        nn1Coverage: "Couverture de comparaison",
+        nn1Quality: "Qualité de comparaison",
+        qualityExcellent: "Excellente",
+        qualityGood: "Bonne",
+        qualityPartial: "Partielle",
+        qualityInsufficient: "Insuffisante",
+        nn1CurrentCoverage: "Période actuelle",
+        nn1PreviousCoverage: "N-1",
+        nn1ConsumptionChange: "Évolution de la consommation",
+        nn1DailyChange: "Évolution par jour",
+        nn1CostChange: "Évolution du coût",
+        nn1PriceChange: "Évolution du prix unitaire",
+        nn1CostDayChange: "Évolution du coût/jour",
+        nn1ChartTitle: "N / N-1 · évolution mensuelle",
+        nn1InsightTitle: "Lecture de la comparaison",
+        nn1Incomplete: "La comparaison est indicative car une partie des jours n’est pas couverte par des données.",
+        variationStrong: "Variation forte",
+        variationModerate: "Variation notable",
+        variationStable: "Variation limitée",
+        comparedWithLastYear: "par rapport à la même période N-1",
+        heatingNormalized: "Chauffage normalisé",
+        heatingDegreeDays: "Degrés-jours",
+        heatingPer100Dd: "Consommation / 100 degrés-jours",
+        heatingNormalizationUnavailable: "La normalisation météo nécessite une répartition chauffage basée sur la température extérieure.",
+        heatingNormalizationHelp: "Rapporte la consommation à 100 degrés-jours pour distinguer l’effet de la météo de l’évolution de l’usage.",
+        pvShareChange: "Évolution de la part PV",
+        percentagePoints: "points",
+        insightConsumptionDown: "La consommation baisse par rapport à N-1.",
+        insightConsumptionUp: "La consommation augmente par rapport à N-1.",
+        insightPriceUp: "Le prix unitaire augmente par rapport à N-1.",
+        insightPriceDown: "Le prix unitaire diminue par rapport à N-1.",
+        insightCostDown: "Le coût total diminue par rapport à N-1.",
+        insightCostUp: "Le coût total augmente par rapport à N-1.",
+        insightWeatherImproved: "Après normalisation par degrés-jours, l’efficacité de chauffage s’améliore.",
+        insightWeatherWorse: "Après normalisation par degrés-jours, la consommation de chauffage augmente.",
+        insightStable: "Aucune variation importante n’est détectée sur les indicateurs comparables.",
         allocationUnits: "Unités de répartition"
       },
       en: {
@@ -648,6 +697,48 @@ class RentalConsumptionPanel extends HTMLElement {
         errorApartmentSetup: "The dwelling was created but could not be loaded in Home Assistant.",
         errorSafeRebuild: "This destination does not support a safe delete-and-rebuild.",
         errorDeleteUnsupported: "Safe deletion is not available for this destination.",
+        nn1Title: "Year-over-year comparison",
+        nn1Help: "Compares the displayed range with the same calendar dates one year earlier using reconstructed daily values.",
+        nn1Current: "Current period",
+        nn1Previous: "Same period last year",
+        nn1NoData: "No comparable data is available for the same period one year earlier.",
+        nn1ChooseRange: "Choose a year, billing period or custom range to enable year-over-year comparison.",
+        nn1Coverage: "Comparison coverage",
+        nn1Quality: "Comparison quality",
+        qualityExcellent: "Excellent",
+        qualityGood: "Good",
+        qualityPartial: "Partial",
+        qualityInsufficient: "Insufficient",
+        nn1CurrentCoverage: "Current period",
+        nn1PreviousCoverage: "Previous year",
+        nn1ConsumptionChange: "Consumption change",
+        nn1DailyChange: "Daily-use change",
+        nn1CostChange: "Cost change",
+        nn1PriceChange: "Unit-price change",
+        nn1CostDayChange: "Daily-cost change",
+        nn1ChartTitle: "Year-over-year monthly comparison",
+        nn1InsightTitle: "Comparison reading",
+        nn1Incomplete: "The comparison is indicative because some days are not covered by data.",
+        variationStrong: "Strong variation",
+        variationModerate: "Notable variation",
+        variationStable: "Limited variation",
+        comparedWithLastYear: "compared with the same period last year",
+        heatingNormalized: "Weather-normalized heating",
+        heatingDegreeDays: "Degree days",
+        heatingPer100Dd: "Consumption / 100 degree days",
+        heatingNormalizationUnavailable: "Weather normalization requires heating allocation based on outdoor temperature.",
+        heatingNormalizationHelp: "Expresses consumption per 100 degree days to separate weather effects from usage changes.",
+        pvShareChange: "PV share change",
+        percentagePoints: "points",
+        insightConsumptionDown: "Consumption is lower than the same period last year.",
+        insightConsumptionUp: "Consumption is higher than the same period last year.",
+        insightPriceUp: "The unit price is higher than last year.",
+        insightPriceDown: "The unit price is lower than last year.",
+        insightCostDown: "Total cost is lower than last year.",
+        insightCostUp: "Total cost is higher than last year.",
+        insightWeatherImproved: "After degree-day normalization, heating efficiency improved.",
+        insightWeatherWorse: "After degree-day normalization, heating consumption increased.",
+        insightStable: "No major variation is detected across comparable indicators.",
         allocationUnits: "Allocation units"
       }
     };
@@ -956,19 +1047,36 @@ class RentalConsumptionPanel extends HTMLElement {
     for (const config of this._pendingCharts || []) {
       const host = this.shadowRoot.querySelector(`#${config.id}`);
       if (!host) continue;
-      const values = (config.rows || []).map((row) => ({ label: row.label || row.key, value: row[config.metric] })).filter((row) => row.value != null && Number.isFinite(Number(row.value)));
-      if (!values.length) continue;
       const chart = document.createElement("ha-chart-base");
       chart.hass = this._hass;
       chart.height = "300px";
-      chart.data = [{ id: config.id, name: config.unit || this._t("metric"), type: config.mode, data: values.map((item) => Number(item.value)), smooth: config.mode === "line", showSymbol: config.mode === "line" }];
-      chart.options = {
-        animation: true,
-        grid: { left: 56, right: 20, top: 30, bottom: 50, containLabel: true },
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "category", data: values.map((item) => item.label), axisLabel: { hideOverlap: true } },
-        yAxis: { type: "value", name: config.unit || "", min: 0 },
-      };
+      if (config.mode === "comparison") {
+        const values = (config.rows || []).map((row) => ({ label: row.label || row.key, current: row.current?.[config.metric], previous: row.previous?.[config.metric] })).filter((row) => row.current != null || row.previous != null);
+        if (!values.length) continue;
+        chart.data = [
+          { id: `${config.id}-current`, name: this._t("nn1Current"), type: "line", data: values.map((item) => item.current == null ? null : Number(item.current)), smooth: true, showSymbol: true },
+          { id: `${config.id}-previous`, name: this._t("nn1Previous"), type: "line", data: values.map((item) => item.previous == null ? null : Number(item.previous)), smooth: true, showSymbol: true },
+        ];
+        chart.options = {
+          animation: true,
+          grid: { left: 56, right: 20, top: 30, bottom: 50, containLabel: true },
+          tooltip: { trigger: "axis" },
+          legend: { show: true },
+          xAxis: { type: "category", data: values.map((item) => item.label), axisLabel: { hideOverlap: true } },
+          yAxis: { type: "value", name: config.unit || "", min: 0 },
+        };
+      } else {
+        const values = (config.rows || []).map((row) => ({ label: row.label || row.key, value: row[config.metric] })).filter((row) => row.value != null && Number.isFinite(Number(row.value)));
+        if (!values.length) continue;
+        chart.data = [{ id: config.id, name: config.unit || this._t("metric"), type: config.mode, data: values.map((item) => Number(item.value)), smooth: config.mode === "line", showSymbol: config.mode === "line" }];
+        chart.options = {
+          animation: true,
+          grid: { left: 56, right: 20, top: 30, bottom: 50, containLabel: true },
+          tooltip: { trigger: "axis" },
+          xAxis: { type: "category", data: values.map((item) => item.label), axisLabel: { hideOverlap: true } },
+          yAxis: { type: "value", name: config.unit || "", min: 0 },
+        };
+      }
       host.replaceChildren(chart);
     }
   }
@@ -1156,6 +1264,143 @@ class RentalConsumptionPanel extends HTMLElement {
       </section>`;
   }
 
+  _nn1Data(entry, data, typeData, range) {
+    if (!range || this._timeScope === "all") return null;
+    const previousRange = previousYearRange(range);
+    if (!previousRange) return null;
+    const allRows = typeData?.daily || [];
+    const currentRows = filterDailyRows(allRows, range.start, range.end);
+    const previousRows = filterDailyRows(allRows, previousRange.start, previousRange.end);
+    const current = summarizeDailyRows(currentRows);
+    const previous = summarizeDailyRows(previousRows);
+    const currentCoverage = dataCoverage(allRows, range);
+    const previousCoverage = dataCoverage(allRows, previousRange);
+    const quality = comparisonQuality(currentCoverage, previousCoverage);
+    const changes = compareSummaries(current, previous);
+    const heatingCurrent = this._analysisType === "heating" ? summarizeDegreeDays(currentRows) : null;
+    const heatingPrevious = this._analysisType === "heating" ? summarizeDegreeDays(previousRows) : null;
+    const heatingChange = heatingCurrent?.consumptionPer100DegreeDays != null && heatingPrevious?.consumptionPer100DegreeDays != null
+      ? compareSummaries({ consumption: heatingCurrent.consumptionPer100DegreeDays }, { consumption: heatingPrevious.consumptionPer100DegreeDays }).consumption_pct
+      : null;
+    let pvShare = null;
+    let pvSharePrevious = null;
+    let pvShareChange = null;
+    if (this._analysisType === "electricity" || this._analysisType === "pv_electricity") {
+      const gridCurrent = this._selectedSummary(data, "electricity", range).consumption || 0;
+      const pvCurrent = this._selectedSummary(data, "pv_electricity", range).consumption || 0;
+      const gridPrevious = this._selectedSummary(data, "electricity", previousRange).consumption || 0;
+      const pvPrevious = this._selectedSummary(data, "pv_electricity", previousRange).consumption || 0;
+      const currentTotal = gridCurrent + pvCurrent;
+      const previousTotal = gridPrevious + pvPrevious;
+      pvShare = currentTotal > 0 ? pvCurrent / currentTotal * 100 : null;
+      pvSharePrevious = previousTotal > 0 ? pvPrevious / previousTotal * 100 : null;
+      pvShareChange = pvShare != null && pvSharePrevious != null ? pvShare - pvSharePrevious : null;
+    }
+    return {
+      range,
+      previousRange,
+      currentRows,
+      previousRows,
+      current,
+      previous,
+      currentCoverage,
+      previousCoverage,
+      quality,
+      changes,
+      aligned: alignPreviousYearMonthlyRows(currentRows, previousRows),
+      heatingCurrent,
+      heatingPrevious,
+      heatingChange,
+      pvShare,
+      pvSharePrevious,
+      pvShareChange,
+    };
+  }
+
+  _nn1QualityLabel(quality) {
+    return this._t({ excellent: "qualityExcellent", good: "qualityGood", partial: "qualityPartial", insufficient: "qualityInsufficient" }[quality] || "qualityInsufficient");
+  }
+
+  _nn1VariationBadge(value) {
+    if (value == null || !Number.isFinite(Number(value))) return `<span class="variation-badge neutral">—</span>`;
+    const numeric = Number(value);
+    const level = notableVariation(numeric);
+    const label = level === "strong" ? this._t("variationStrong") : level === "moderate" ? this._t("variationModerate") : this._t("variationStable");
+    const sign = numeric > 0 ? "+" : "";
+    return `<span class="variation-badge ${numeric > 0 ? "up" : numeric < 0 ? "down" : "neutral"}">${sign}${this._num(numeric, 1)} % · ${label}</span>`;
+  }
+
+  _nn1Insights(nn1) {
+    if (!nn1 || !nn1.previous?.days) return [];
+    const insights = [];
+    const consumption = nn1.changes?.consumption_pct;
+    const price = nn1.changes?.unit_price_pct;
+    const cost = nn1.changes?.cost_pct;
+    if (notableVariation(consumption) !== "stable" && consumption != null) insights.push(consumption < 0 ? this._t("insightConsumptionDown") : this._t("insightConsumptionUp"));
+    if (notableVariation(price) !== "stable" && price != null) insights.push(price < 0 ? this._t("insightPriceDown") : this._t("insightPriceUp"));
+    if (notableVariation(cost) !== "stable" && cost != null) insights.push(cost < 0 ? this._t("insightCostDown") : this._t("insightCostUp"));
+    if (this._analysisType === "heating" && nn1.heatingChange != null && notableVariation(nn1.heatingChange) !== "stable") insights.push(nn1.heatingChange < 0 ? this._t("insightWeatherImproved") : this._t("insightWeatherWorse"));
+    if (!insights.length) insights.push(this._t("insightStable"));
+    if (nn1.quality === "partial" || nn1.quality === "insufficient") insights.unshift(this._t("nn1Incomplete"));
+    return insights;
+  }
+
+  _nn1Panel(entry, data, typeData, range) {
+    if (this._timeScope === "all") {
+      return `<section class="card nn1-card"><div class="section-header"><div><h2>${this._t("nn1Title")}</h2><p class="muted">${this._t("nn1Help")}</p></div></div><div class="empty">${this._t("nn1ChooseRange")}</div></section>`;
+    }
+    const nn1 = this._nn1Data(entry, data, typeData, range);
+    if (!nn1 || !nn1.previous?.days) {
+      return `<section class="card nn1-card"><div class="section-header"><div><h2>${this._t("nn1Title")}</h2><p class="muted">${this._t("nn1Help")}</p></div></div><div class="empty">${this._t("nn1NoData")}</div></section>`;
+    }
+    const unit = typeData.unit || "";
+    const currency = typeData.currency || entry.units.currency;
+    const qualityClass = nn1.quality === "excellent" ? "ok" : nn1.quality === "good" ? "ok" : nn1.quality === "partial" ? "warning" : "error";
+    const insights = this._nn1Insights(nn1);
+    return `<section class="card nn1-card">
+      <div class="section-header"><div><h2>${this._t("nn1Title")}</h2><p class="muted">${this._t("nn1Help")}</p></div><span class="quality-pill ${qualityClass}">${this._t("nn1Quality")}: ${this._nn1QualityLabel(nn1.quality)}</span></div>
+      <div class="nn1-range-grid"><div><span>${this._t("nn1Current")}</span><strong>${this._date(nn1.range.start)} – ${this._date(nn1.range.end)}</strong></div><div><span>${this._t("nn1Previous")}</span><strong>${this._date(nn1.previousRange.start)} – ${this._date(nn1.previousRange.end)}</strong></div></div>
+      <div class="coverage-comparison"><div><span>${this._t("nn1CurrentCoverage")}</span><strong>${this._num(nn1.currentCoverage * 100, 1)} %</strong><div class="coverage-track"><i style="width:${Math.min(100, Math.max(0, nn1.currentCoverage * 100))}%"></i></div></div><div><span>${this._t("nn1PreviousCoverage")}</span><strong>${this._num(nn1.previousCoverage * 100, 1)} %</strong><div class="coverage-track"><i style="width:${Math.min(100, Math.max(0, nn1.previousCoverage * 100))}%"></i></div></div></div>
+      <div class="nn1-kpi-grid">
+        <article><span>${this._t("nn1ConsumptionChange")}</span><strong>${this._num(nn1.current.consumption,3)} ${this._escape(unit)}</strong>${this._nn1VariationBadge(nn1.changes.consumption_pct)}</article>
+        <article><span>${this._t("nn1DailyChange")}</span><strong>${nn1.current.dailyAverage == null ? "—" : `${this._num(nn1.current.dailyAverage,3)} ${this._escape(unit)}${this._t("perDay")}`}</strong>${this._nn1VariationBadge(nn1.changes.daily_average_pct)}</article>
+        <article><span>${this._t("nn1CostChange")}</span><strong>${nn1.current.cost == null ? "—" : `${this._num(nn1.current.cost,2)} ${this._escape(currency)}`}</strong>${this._nn1VariationBadge(nn1.changes.cost_pct)}</article>
+        <article><span>${this._t("nn1PriceChange")}</span><strong>${nn1.current.unitPrice == null ? "—" : `${this._num(nn1.current.unitPrice,4)} ${this._escape(entry.units.unit_prices?.[this._analysisType] || "")}`}</strong>${this._nn1VariationBadge(nn1.changes.unit_price_pct)}</article>
+        <article><span>${this._t("nn1CostDayChange")}</span><strong>${nn1.current.costPerDay == null ? "—" : `${this._num(nn1.current.costPerDay,2)} ${this._escape(currency)}${this._t("perDay")}`}</strong>${this._nn1VariationBadge(nn1.changes.cost_per_day_pct)}</article>
+      </div>
+      <div class="nn1-chart-wrap"><h3>${this._t("nn1ChartTitle")}</h3>${this._comparisonChartSlot("nn1-comparison-chart", nn1.aligned, "consumption", unit)}</div>
+      ${this._analysisType === "heating" ? `<div class="heating-normalized"><div><span>${this._t("heatingDegreeDays")}</span><strong>${nn1.heatingCurrent?.degreeDays == null ? "—" : this._num(nn1.heatingCurrent.degreeDays,1)}</strong></div><div><span>${this._t("heatingPer100Dd")}${this._help(this._t("heatingNormalizationHelp"))}</span><strong>${nn1.heatingCurrent?.consumptionPer100DegreeDays == null ? "—" : `${this._num(nn1.heatingCurrent.consumptionPer100DegreeDays,2)} ${this._escape(unit)}`}</strong>${this._nn1VariationBadge(nn1.heatingChange)}</div></div>` : ""}
+      ${(this._analysisType === "electricity" || this._analysisType === "pv_electricity") && nn1.pvShare != null ? `<div class="pv-comparison"><span>${this._t("pvShareChange")}</span><strong>${this._num(nn1.pvShare,1)} %</strong><small>${nn1.pvShareChange == null ? "—" : `${nn1.pvShareChange > 0 ? "+" : ""}${this._num(nn1.pvShareChange,1)} ${this._t("percentagePoints")}`}</small></div>` : ""}
+      <div class="insight-box"><h3>${this._t("nn1InsightTitle")}</h3><ul>${insights.map((item) => `<li>${item}</li>`).join("")}</ul></div>
+    </section>`;
+  }
+
+  _comparisonChartSlot(id, rows, metric, unit) {
+    const fallback = this._comparisonChart(rows, metric, unit);
+    if (!this._pendingCharts) this._pendingCharts = [];
+    this._pendingCharts.push({ id, rows, metric, unit, mode: "comparison" });
+    return `<div id="${id}" class="chart-slot">${fallback}</div>`;
+  }
+
+  _comparisonChart(rows, metric, unit) {
+    const values = (rows || []).map((row) => ({ label: row.label || row.key, current: row.current?.[metric], previous: row.previous?.[metric] })).filter((row) => row.current != null || row.previous != null);
+    if (!values.length) return `<div class="empty">${this._t("noAnalysisData")}</div>`;
+    const width = 920, height = 300, left = 64, right = 24, top = 28, bottom = 54;
+    const innerW = width-left-right, innerH = height-top-bottom;
+    const all = values.flatMap((item) => [item.current, item.previous]).filter((value) => value != null && Number.isFinite(Number(value))).map(Number);
+    const max = Math.max(...all, 0), range = max || 1;
+    const x = (index) => left + (values.length === 1 ? innerW/2 : index*innerW/(values.length-1));
+    const y = (value) => top + innerH - (Number(value)/range)*innerH;
+    const points = (key) => values.map((item,index) => item[key] == null ? null : `${x(index).toFixed(1)},${y(item[key]).toFixed(1)}`).filter(Boolean).join(" ");
+    const ticks = Array.from({length:5},(_,i)=>max*i/4);
+    return `<div class="svg-chart nn1-svg"><div class="chart-legend"><span class="legend-current">● ${this._t("nn1Current")}</span><span class="legend-previous">● ${this._t("nn1Previous")}</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(this._t("nn1ChartTitle"))}">
+      ${ticks.map((tick)=>{const yy=y(tick);return `<line x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}" class="grid-line"/><text x="${left-10}" y="${yy+4}" text-anchor="end" class="axis-text">${this._escape(this._num(tick,2))}</text>`}).join("")}
+      <polyline points="${points("previous")}" class="chart-line comparison-previous"/>
+      <polyline points="${points("current")}" class="chart-line comparison-current"/>
+      ${values.map((item,index)=>`<text x="${x(index)}" y="${height-18}" text-anchor="middle" class="axis-text x-label">${this._escape(item.label)}</text>`).join("")}
+    </svg><div class="chart-unit">${this._escape(unit)}</div></div>`;
+  }
+
   _analysisTab(entry) {
     if (this._analysisLoading) {
       return `<section class="card"><h2>${this._t("analysis")}</h2><div class="empty">${this._t("loadingAnalysis")}</div></section>`;
@@ -1201,6 +1446,7 @@ class RentalConsumptionPanel extends HTMLElement {
         ${this._chartSlot("analysis-main-chart", rows, metric, metricUnit, chartMode)}
       </section>
       ${(this._analysisType === "electricity" || this._analysisType === "pv_electricity") ? `<section class="card chart-card"><div class="section-header"><div><h2>${this._t("electricityMix")}</h2>${latestMix ? `<span class="muted">${this._t("pvShare")}: ${latestMix.pv_share == null ? "—" : `${this._num(latestMix.pv_share,1)} %`} · ${this._t("totalSupply")}: ${this._num(latestMix.total,2)} kWh</span>` : ""}</div></div>${this._mixChart(mix)}</section>` : ""}
+      ${this._nn1Panel(entry, data, typeData, range)}
       <section class="analysis-layout">
         <article class="card"><h2>${this._t("electricity")}</h2>${this._analysisDetails(entry.electricity_analysis, false)}</article>
         <article class="card"><h2>${this._t("heating")}</h2>${this._analysisDetails(entry.heating_analysis, true)}</article>
@@ -1961,9 +2207,10 @@ class RentalConsumptionPanel extends HTMLElement {
 
       .field-label{display:flex!important;align-items:center;gap:6px!important;min-height:20px}.required-marker{color:var(--error-color);margin-left:3px}.optional-marker{margin-left:6px;color:var(--secondary-text-color);font-size:12px;font-weight:400}.help-icon{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px;font-weight:700;cursor:help;flex:0 0 auto}.help-icon::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:320px;padding:8px 10px;border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,none);font-size:12px;font-weight:400;line-height:1.35;opacity:0;visibility:hidden;pointer-events:none;z-index:50;white-space:normal}.help-icon:hover::after,.help-icon:focus::after{opacity:1;visibility:visible}.entity-picker-wrap{display:grid;gap:5px}.entity-picker-wrap ha-entity-picker{width:100%}.entity-picker-fallback{display:none}.entity-picker-wrap ha-entity-picker:not(:defined){display:none}.entity-picker-wrap ha-entity-picker:not(:defined)+.entity-picker-fallback{display:block}.advanced-toggle-card{padding:14px 20px}.advanced-toggle{padding-left:0}.advanced-content{padding-top:14px;border-top:1px solid var(--divider-color);margin-top:10px}.backend-options{margin-top:14px;padding:12px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.backend-options summary{cursor:pointer;font-weight:600;color:var(--primary-text-color);margin-bottom:12px}.options-grid{margin-top:12px}.unsaved-warning{margin:10px 0;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning-color) 12%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--warning-color) 55%,var(--divider-color));color:var(--primary-text-color);font-size:13px}.message-action,.status-action{margin-top:8px;font-size:13px}.technical-details{margin-top:10px}.technical-details summary{cursor:pointer;color:var(--secondary-text-color);font-size:12px}.technical-details pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px;max-height:180px;overflow:auto}.context-alert{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;border-radius:10px;border:1px solid var(--divider-color);background:var(--card-background-color);font-size:13px}.context-alert>div>div{margin-top:4px;color:var(--secondary-text-color)}.warning-alert{border-color:color-mix(in srgb,var(--warning-color) 55%,var(--divider-color));background:color-mix(in srgb,var(--warning-color) 9%,var(--card-background-color))}.error-alert{border-color:color-mix(in srgb,var(--error-color) 55%,var(--divider-color));background:color-mix(in srgb,var(--error-color) 8%,var(--card-background-color))}.action-description{margin-top:8px;color:var(--secondary-text-color);font-size:12px;text-align:right}.status-dot.warning{background:var(--warning-color)}.status-dot.neutral{background:var(--disabled-text-color)}.export-status.level-warning{border-color:color-mix(in srgb,var(--warning-color) 50%,var(--divider-color))}.export-status.level-error{border-color:color-mix(in srgb,var(--error-color) 50%,var(--divider-color))}.export-status.level-ok{border-color:color-mix(in srgb,var(--success-color) 45%,var(--divider-color))}.status-steps .step{font-size:12px}.status-message{font-size:13px!important;color:var(--primary-text-color)!important}
       .setup-card{border-color:color-mix(in srgb,var(--primary-color) 35%,var(--divider-color))}.setup-card p{margin:5px 0 0}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.setup-step{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.setup-step.done{opacity:.82}.setup-check{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--divider-color);font-weight:700}.setup-step.done .setup-check{color:var(--success-color);border-color:color-mix(in srgb,var(--success-color) 60%,var(--divider-color))}.setup-step.pending .setup-check{color:var(--warning-color)}.setup-step strong,.setup-step small{display:block}.setup-step small,.setup-done{color:var(--secondary-text-color);font-size:12px}.empty-summary{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}.empty-summary .empty-title{font-size:14px}.inline-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;color:var(--secondary-text-color);font-size:13px}.warning-inline{color:var(--primary-text-color)}.period-duration{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px}.period-duration small{color:var(--secondary-text-color)}.date-picker-wrap{display:grid;gap:4px}.date-picker-wrap ha-date-input{width:100%}.date-picker-fallback{width:100%}.pricing-help{margin-top:-4px}.recorder-action{display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:430px}.recorder-action small{color:var(--secondary-text-color);font-size:12px;text-align:right;line-height:1.35}.button[aria-busy="true"]{opacity:.72}.modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:color-mix(in srgb,var(--primary-background-color) 48%,transparent);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:var(--ha-card-box-shadow,none)}.modal-card .section-header{margin-bottom:16px}
+      .nn1-card{display:grid;gap:16px}.quality-pill{padding:7px 10px;border-radius:999px;border:1px solid var(--divider-color);font-size:12px;font-weight:600;white-space:nowrap}.quality-pill.ok{color:var(--success-color);border-color:color-mix(in srgb,var(--success-color) 50%,var(--divider-color));background:color-mix(in srgb,var(--success-color) 8%,var(--card-background-color))}.quality-pill.warning{color:var(--warning-color);border-color:color-mix(in srgb,var(--warning-color) 50%,var(--divider-color));background:color-mix(in srgb,var(--warning-color) 8%,var(--card-background-color))}.quality-pill.error{color:var(--error-color);border-color:color-mix(in srgb,var(--error-color) 50%,var(--divider-color));background:color-mix(in srgb,var(--error-color) 8%,var(--card-background-color))}.nn1-range-grid,.coverage-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.nn1-range-grid>div,.coverage-comparison>div{padding:12px;border-radius:10px;background:var(--secondary-background-color);border:1px solid var(--divider-color)}.nn1-range-grid span,.coverage-comparison span,.nn1-kpi-grid span,.heating-normalized span,.pv-comparison span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:5px}.coverage-track{height:7px;border-radius:999px;background:var(--card-background-color);overflow:hidden;margin-top:8px;border:1px solid var(--divider-color)}.coverage-track i{display:block;height:100%;background:var(--primary-color);border-radius:999px}.nn1-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.nn1-kpi-grid article{padding:12px;border-radius:10px;background:var(--secondary-background-color);border:1px solid var(--divider-color)}.nn1-kpi-grid strong{display:block;font-size:15px;margin-bottom:7px}.variation-badge{display:inline-block;font-size:11px;padding:4px 7px;border-radius:999px;border:1px solid var(--divider-color)}.variation-badge.up{color:var(--warning-color);border-color:color-mix(in srgb,var(--warning-color) 45%,var(--divider-color))}.variation-badge.down{color:var(--success-color);border-color:color-mix(in srgb,var(--success-color) 45%,var(--divider-color))}.variation-badge.neutral{color:var(--secondary-text-color)}.nn1-chart-wrap h3,.insight-box h3{margin:0 0 10px;font-size:15px}.chart-legend{display:flex;gap:14px;justify-content:flex-end;font-size:12px;color:var(--secondary-text-color);padding:0 4px 4px}.legend-current{color:var(--primary-color)}.legend-previous{color:var(--warning-color)}.comparison-current{stroke:var(--primary-color)!important}.comparison-previous{stroke:var(--warning-color)!important}.heating-normalized{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.heating-normalized>div,.pv-comparison,.insight-box{padding:13px;border-radius:10px;background:var(--secondary-background-color);border:1px solid var(--divider-color)}.pv-comparison{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px}.pv-comparison span{margin:0}.pv-comparison small{color:var(--secondary-text-color)}.insight-box ul{margin:0;padding-left:20px;display:grid;gap:6px;color:var(--primary-text-color);font-size:13px;line-height:1.45}
       .hidden{display:none!important}
-      @media(max-width:1100px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid,.analysis-kpi-grid.six{grid-template-columns:repeat(2,minmax(0,1fr))}.time-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
-      @media(max-width:700px){main{padding:14px 10px 40px}.setup-steps{grid-template-columns:1fr}.setup-step{grid-template-columns:auto 1fr}.setup-step .button,.setup-done{grid-column:2}.inline-empty{align-items:flex-start;flex-direction:column}.period-duration{align-items:flex-start;flex-direction:column}.recorder-action{align-items:flex-start;max-width:none;width:100%}.recorder-action small{text-align:left}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid,.analysis-kpi-grid.six,.time-scope-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.period-nav{grid-template-columns:42px minmax(0,1fr) 42px}.scope-range{margin-top:2px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
+      @media(max-width:1100px){.nn1-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid,.analysis-kpi-grid.six{grid-template-columns:repeat(2,minmax(0,1fr))}.time-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
+      @media(max-width:700px){.nn1-range-grid,.coverage-comparison,.nn1-kpi-grid,.heating-normalized{grid-template-columns:1fr}.pv-comparison{grid-template-columns:1fr}.chart-legend{justify-content:flex-start;flex-wrap:wrap}main{padding:14px 10px 40px}.setup-steps{grid-template-columns:1fr}.setup-step{grid-template-columns:auto 1fr}.setup-step .button,.setup-done{grid-column:2}.inline-empty{align-items:flex-start;flex-direction:column}.period-duration{align-items:flex-start;flex-direction:column}.recorder-action{align-items:flex-start;max-width:none;width:100%}.recorder-action small{text-align:left}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid,.analysis-kpi-grid.six,.time-scope-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.period-nav{grid-template-columns:42px minmax(0,1fr) 42px}.scope-range{margin-top:2px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
     `;
   }
 }

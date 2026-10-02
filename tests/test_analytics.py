@@ -1,4 +1,4 @@
-"""Pure analytics tests for v1.6.3."""
+"""Pure analytics tests for v1.7.0."""
 
 from datetime import date
 
@@ -110,3 +110,19 @@ def test_grid_pv_mix_keeps_supplies_separate() -> None:
     assert mix[0]["pv"] == pytest.approx(100)
     assert mix[0]["total"] == pytest.approx(400)
     assert mix[0]["pv_share"] == pytest.approx(25)
+
+
+def test_heating_daily_rows_expose_degree_days_for_weather_normalization() -> None:
+    period = ConsumptionPeriod.create(
+        "heating", date(2026, 1, 1), date(2026, 1, 2), 30
+    )
+    weights = {
+        "heating": {
+            period.period_id: {date(2026, 1, 1): 5, date(2026, 1, 2): 15}
+        }
+    }
+    payload = build_analysis_payload([period], _units(), "CHF", weights)
+    daily = payload["types"]["heating"]["daily"]
+    assert daily[0]["degree_days"] == pytest.approx(5)
+    assert daily[1]["degree_days"] == pytest.approx(15)
+    assert sum(row["consumption"] for row in daily) == pytest.approx(30)

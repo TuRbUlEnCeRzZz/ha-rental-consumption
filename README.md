@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focused on UX reliability, contextual help and a simpler Settings experience. Version 1.6.2 improves first-run guidance, empty states and billing-period entry workflows. Version 1.6.3 adds exact shared time-range selection across Overview and Analysis, period navigation, range-aware KPIs and additional charting polish.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focused on UX reliability, contextual help and a simpler Settings experience. Version 1.6.2 improves first-run guidance, empty states and billing-period entry workflows. Version 1.6.3 adds shared time-range selection and precise partial-period analysis. Version 1.7.0 adds year-over-year (N/N-1) analytical comparison, comparison-quality scoring and weather-normalized heating analysis.
 
 ## Highlights
 
@@ -32,10 +32,10 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - period, monthly and annual analysis granularities;
 - latest-period comparisons normalized by day;
 - monthly grid/PV supply mix and PV share;
-- shared Overview/Analysis time scopes: all data, year, billing period, or exact custom range;
-- previous/next billing-period navigation in Analysis;
-- range-aware Overview totals, Analysis KPIs, cost/day and exact partial-period calculations;
-- Home Assistant `ha-chart-base` progressive enhancement with a dependency-free SVG fallback.
+- exact N/N-1 comparison against the same calendar dates one year earlier;
+- comparison-quality scoring based on actual covered days;
+- deterministic insight text for notable consumption, cost and unit-price changes;
+- heating normalization in kWh per 100 degree days when temperature-based heating allocation is available.
 
 ## Compatibility
 
@@ -57,44 +57,39 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 
 
 
-## What changed in v1.6.3
+## What changed in v1.7.0
 
-### Shared time scope
+### Exact N/N-1 comparison
 
-Overview and Analysis now share the same time selection:
+The Analysis tab can now compare the selected year, billing period or custom date range with the **same calendar dates one year earlier**. The comparison uses the reconstructed daily rows, so a custom range that cuts through billing periods remains exact and uses the same allocation shape as Recorder.
 
-```text
-All data | Year | Billing period | Custom range
-```
+The comparison covers:
 
-The selected scope is preserved when switching between the two tabs. Billing-period mode adds previous/next arrows in Analysis so consecutive bills can be reviewed without reopening the selector.
-
-Custom ranges are exact. v1.6.3 exposes the already reconstructed daily values in the analysis payload and filters those daily points before aggregating them. A range such as `15.02.2026 → 15.05.2026` therefore uses only the reconstructed days inside that range, even when it cuts across multiple bills. No backend storage format changes.
-
-### Range-aware Overview and Analysis
-
-Overview totals, costs and weighted unit prices now follow the selected scope and display the covered dates/day count. Grid electricity also gains a simple consumption-by-billing-period bar chart.
-
-Analysis now shows selection-level KPIs for:
-
-- consumption;
+- total consumption;
 - normalized consumption per day;
 - total cost;
 - weighted unit price;
-- cost per day;
-- covered date range.
+- cost per day.
 
-When one billing period is selected, the existing percentage comparison remains available against the immediately previous period. Deeper N/N-1 logic remains reserved for v1.7.0.
+The existing comparison with the immediately previous billing period remains available when a billing period is selected. N/N-1 is a separate analytical layer.
 
-The grid/PV mix is filtered by the same exact date range. A short deterministic sentence summarizes the selected range and, for grid electricity, how many overlapping billing periods used load-curve weighting.
+### Comparison quality and coverage
 
-### Charting and accessibility polish
+The app measures how many calendar days are actually covered in both the current and N-1 ranges. It labels the comparison quality as **Excellent**, **Good**, **Partial** or **Insufficient** instead of presenting incomplete history as a fully reliable comparison.
 
-Billing-period charts use bars while monthly/annual trends use lines. The panel progressively uses Home Assistant's existing `ha-chart-base` when that component is already available in the frontend, while retaining the dependency-free SVG chart renderer as a fallback. No third-party dependency is added.
+A dedicated N/N-1 chart aligns monthly values on the current-year axis and displays the current and previous-year series together.
 
-Small labels are at least 12 px, time-scope controls collapse cleanly on mobile, and UI state colors rely on Home Assistant theme variables rather than hard-coded color fallbacks.
+### Deterministic analytical reading
 
+The interface highlights notable changes in consumption, cost and unit price using deterministic thresholds. The text is generated from measured/reconstructed values only; no external AI service is required.
 
+For grid/PV electricity, the Analysis tab also reports the change in PV share in percentage points when both years contain PV data.
+
+### Weather-normalized heating
+
+When heating is distributed from outdoor-temperature degree days, daily analytical rows now expose those degree-day weights. The N/N-1 panel can therefore compare **consumption per 100 degree days**, helping separate weather severity from changes in heating use.
+
+No storage migration is required for v1.7.0. Existing periods, Recorder statistics and external database series remain compatible.
 
 ## What changed in v1.6.2
 
@@ -607,7 +602,8 @@ After updating:
 
 ## Roadmap
 
-- **v1.7.0**: deeper analytical quality, N/N-1 comparisons, normalized trend interpretation and richer cross-period insights.
+- **v1.6.3**: Overview/Analysis UX, accessibility/mobile polish, additional charts, shared time-scope selection (all data / year / billing period / custom range), and previous/next period arrows in the Analysis tab.
+- **v1.7.0**: deeper analytical quality and N/N-1 comparisons.
 
 ## Data and backups
 

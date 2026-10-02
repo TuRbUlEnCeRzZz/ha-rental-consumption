@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.6.3."""
+"""Repository-level consistency tests for v1.7.0."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.6.3"
+    assert manifest["version"] == VERSION == "1.7.0"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -275,3 +275,30 @@ def test_v163_uses_theme_variables_without_hard_coded_ui_colors() -> None:
     assert "#db4437" not in panel
     assert "#43a047" not in panel
     assert "rgba(" not in panel
+
+
+def test_v170_year_over_year_and_quality_analytics_are_shipped() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    utils = (INTEGRATION / "frontend" / "ui-utils.mjs").read_text(encoding="utf-8")
+    analytics = (INTEGRATION / "analytics.py").read_text(encoding="utf-8")
+    for token in (
+        "nn1Title",
+        "_nn1Panel",
+        "_nn1Data",
+        "comparisonQuality",
+        "previousYearRange",
+        "nn1-comparison-chart",
+        "heatingPer100Dd",
+        "pvShareChange",
+    ):
+        assert token in panel or token in utils
+    assert "degree_days" in analytics
+    assert "include_degree_days" in analytics
+
+
+def test_v170_keeps_analysis_deterministic_and_dependency_free() -> None:
+    manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert manifest["requirements"] == []
+    assert "Math.random" not in panel
+    assert "openai" not in panel.lower()
