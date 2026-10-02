@@ -1,3 +1,5 @@
+import { classifyError, coverageToPercent, exportStatusLevel, percentToCoverage } from "./ui-utils.mjs";
+
 class RentalConsumptionPanel extends HTMLElement {
   constructor() {
     super();
@@ -19,6 +21,9 @@ class RentalConsumptionPanel extends HTMLElement {
     this._analysisType = "electricity";
     this._analysisGranularity = "monthly";
     this._analysisMetric = "consumption";
+    this._settingsDirty = false;
+    this._exportDirty = false;
+    this._advancedSettingsOpen = false;
   }
 
   set hass(hass) {
@@ -35,7 +40,7 @@ class RentalConsumptionPanel extends HTMLElement {
     const t = {
       fr: {
         title: "Consommation locative",
-        subtitle: "Décomptes historiques, répartition Recorder et export time-series.",
+        subtitle: "Décomptes historiques, répartition des consommations et export vers une base de données.",
         refresh: "Actualiser",
         apartment: "Logement",
         addApartment: "Ajouter un logement",
@@ -56,9 +61,9 @@ class RentalConsumptionPanel extends HTMLElement {
         heating: "Chauffage",
         electricity: "Électricité réseau",
         pvElectricity: "Fourniture PV",
-        providerDefault: "GRD / fournisseur par défaut",
+        providerDefault: "Fournisseur d’électricité (GRD) par défaut",
         providerDefaultHelp: "Utilisé pour préremplir les nouvelles périodes. Les périodes existantes conservent leur fournisseur.",
-        provider: "GRD / fournisseur",
+        provider: "Fournisseur d’électricité (GRD)",
         allProviders: "Tous les fournisseurs",
         currency: "Devise",
         save: "Enregistrer",
@@ -83,7 +88,7 @@ class RentalConsumptionPanel extends HTMLElement {
         victoriametrics: "VictoriaMetrics",
         minCoverage: "Couverture minimale",
         vmMetric: "Métrique VM",
-        vmDb: "Label db VM",
+        vmDb: "Étiquette « db » VM",
         loadHelp: "Automatique : VictoriaMetrics est privilégié lorsqu’il est configuré, puis Recorder est utilisé en secours.",
         addPeriod: "Ajouter une période",
         editPeriod: "Modifier la période",
@@ -95,11 +100,13 @@ class RentalConsumptionPanel extends HTMLElement {
         note: "Note",
         tariff: "Tarif",
         single: "Unitaire",
-        peakOffpeak: "On-peak / Off-peak",
-        peakConsumption: "Consommation on-peak",
-        offpeakConsumption: "Consommation off-peak",
-        peakCost: "Coût on-peak",
-        offpeakCost: "Coût off-peak",
+        peakLabel: "Heures pleines",
+        offpeakLabel: "Heures creuses",
+        peakOffpeak: "Heures pleines / heures creuses",
+        peakConsumption: "Consommation heures pleines",
+        offpeakConsumption: "Consommation heures creuses",
+        peakCost: "Coût heures pleines",
+        offpeakCost: "Coût heures creuses",
         add: "Ajouter",
         edit: "Modifier",
         delete: "Supprimer",
@@ -114,21 +121,21 @@ class RentalConsumptionPanel extends HTMLElement {
         coverage: "Couverture",
         weightedPeriods: "Périodes pondérées",
         fallbackPeriods: "Périodes uniformes",
-        effectiveDistribution: "Répartition effective",
-        configuredDistribution: "Répartition configurée",
+        effectiveDistribution: "Méthode réellement utilisée",
+        configuredDistribution: "Méthode configurée",
         temperatureCoverage: "Couverture température",
         meanTemperature: "Température moyenne",
         exportBackend: "Destination",
         none: "Désactivé",
         url: "URL",
-        database: "Database",
-        retention: "Retention policy",
+        database: "Base de données",
+        retention: "Politique de rétention",
         organization: "Organisation",
-        bucket: "Bucket",
+        bucket: "Bucket (compartiment)",
         username: "Utilisateur",
         password: "Mot de passe",
-        token: "Token",
-        deleteKey: "deleteAuthKey",
+        token: "Jeton",
+        deleteKey: "Clé de suppression (deleteAuthKey)",
         autoSync: "Synchroniser automatiquement après modification",
         test: "Tester la connexion",
         testing: "Test en cours…",
@@ -136,7 +143,7 @@ class RentalConsumptionPanel extends HTMLElement {
         syncing: "Reconstruction…",
         connectionOk: "Connexion validée.",
         lastStatus: "Dernier état",
-        health: "Serveur",
+        health: "Serveur joignable",
         write: "Écriture",
         read: "Lecture",
         deleteStep: "Suppression",
@@ -146,7 +153,7 @@ class RentalConsumptionPanel extends HTMLElement {
         statusTesting: "Test en cours",
         never: "Jamais testé",
         v3Warning: "InfluxDB 3 : écriture prise en charge. La suppression/reconstruction sûre reste désactivée.",
-        vmHelp: "Pour VictoriaMetrics, seule l’URL est obligatoire dans une installation locale sans authentification. Database, identifiants, token et deleteAuthKey restent optionnels.",
+        vmHelp: "Pour VictoriaMetrics en local, seule l’URL est nécessaire. La base de données, les identifiants, le jeton et la clé de suppression sont facultatifs.",
         confirmDelete: "Supprimer définitivement cette période ?",
         confirmRebuild: "Reconstruire toutes les statistiques Recorder ?",
         confirmSync: "Effacer puis réécrire les séries de cet appartement dans la base externe ?",
@@ -155,7 +162,7 @@ class RentalConsumptionPanel extends HTMLElement {
         deleteSuccess: "Période supprimée.",
         rebuildSuccess: "Statistiques Recorder reconstruites.",
         syncSuccess: "Historique externe reconstruit.",
-        tariffHelp: "La somme on-peak + off-peak doit être égale à la consommation totale.",
+        tariffHelp: "La somme heures pleines + heures creuses doit être égale à la consommation totale.",
         distributionUniform: "Uniforme",
         distributionLoad: "Courbe de charge",
         distributionTemperature: "Degrés-jours",
@@ -175,6 +182,8 @@ class RentalConsumptionPanel extends HTMLElement {
         latestPeriod: "Dernière période",
         vsPrevious: "par rapport à la période précédente",
         normalizedUse: "Consommation/jour",
+        daysShort: "j",
+        perDay: "/j",
         trend: "Tendance",
         trendUp: "En hausse",
         trendDown: "En baisse",
@@ -185,7 +194,88 @@ class RentalConsumptionPanel extends HTMLElement {
         pvShare: "Part PV",
         totalSupply: "Fourniture totale",
         deterministicAnalysis: "Analyse déterministe basée sur les périodes enregistrées et la même répartition que Recorder.",
-        analysisLoadError: "Impossible de calculer les données d’analyse."
+        analysisLoadError: "Impossible de calculer les données d’analyse.",
+        noConfiguration: "Aucune configuration.",
+        advancedSettings: "Paramètres avancés",
+        showAdvanced: "Afficher les paramètres avancés",
+        hideAdvanced: "Masquer les paramètres avancés",
+        optionalAuth: "Authentification et options facultatives",
+        optional: "Facultatif",
+        required: "Obligatoire",
+        unsavedChanges: "Modifications non enregistrées",
+        unsavedPrompt: "Des modifications ne sont pas enregistrées. Les abandonner ?",
+        technicalDetails: "Voir les détails techniques",
+        suggestedAction: "Action suggérée",
+        statusPartial: "Partiellement fonctionnel",
+        stepOk: "OK",
+        stepFailed: "échec",
+        stepNotTested: "non testé",
+        openSettings: "Ouvrir les paramètres",
+        fallbackNotice: "La courbe de charge complète n’est pas disponible. La répartition utilise une méthode de secours pour au moins une période.",
+        fallbackImpact: "Les totaux facturés restent exacts, mais leur répartition dans le temps peut être moins précise.",
+        externalErrorNotice: "La base externe signale une erreur de connexion ou de synchronisation.",
+        externalErrorImpact: "Les chiffres affichés restent disponibles depuis les périodes enregistrées et Recorder ; seul l’export externe est concerné tant qu’aucune méthode de répartition n’en dépend directement.",
+        baseExternalHelp: "Connexion facultative à VictoriaMetrics ou InfluxDB pour conserver les données reconstruites dans une base historique externe.",
+        syncDescription: "Supprime puis réécrit les séries historiques appartenant à ce logement. L’opération peut prendre quelques instants.",
+        providerHelp: "Entreprise qui fournit ou distribue l’électricité pour cette période. En Suisse, le GRD est le gestionnaire du réseau de distribution.",
+        recorderHelp: "Base de données interne de Home Assistant utilisée pour l’historique et les statistiques à long terme.",
+        loadCurveHelp: "Profil réel de puissance mesuré dans le temps, utilisé pour répartir une facture sur les jours où l’énergie a réellement été consommée.",
+        configuredDistributionHelp: "Méthode demandée dans les paramètres avant vérification de la disponibilité des données.",
+        effectiveDistributionHelp: "Méthode effectivement appliquée après contrôle des données disponibles et des méthodes de secours.",
+        coverageHelp: "Part de la période pour laquelle des données exploitables sont disponibles.",
+        coverageAvailable: "Données disponibles",
+        coverageAvailableFull: "Données disponibles sur toute la période",
+        weightedPeriodsHelp: "Périodes réparties à partir de données mesurées plutôt que de façon uniforme.",
+        uniformPeriodsHelp: "Périodes réparties uniformément parce qu’aucune pondération fiable n’était disponible.",
+        singleTariffHelp: "Un seul tarif d’électricité est appliqué à toute la période.",
+        baseTempHelp: "Température de référence utilisée pour calculer les degrés-jours de chauffage.",
+        vmMetricHelp: "Nom de la métrique VictoriaMetrics contenant la puissance à utiliser pour la courbe de charge.",
+        vmDbHelp: "Valeur de l’étiquette « db » utilisée pour retrouver les séries Home Assistant dans VictoriaMetrics.",
+        deleteKeyHelp: "Clé facultative qui protège les opérations de suppression dans VictoriaMetrics si cette protection est activée côté serveur.",
+        tokenHelp: "Jeton d’authentification facultatif utilisé par la base externe ou son proxy d’accès.",
+        loadSourceHelp: "Source de données utilisée pour reconstruire la courbe : automatique, VictoriaMetrics ou Recorder.",
+        minCoverageHelp: "Pourcentage minimal de données disponibles avant d’utiliser la courbe de charge au lieu d’une méthode de secours.",
+        entityPowerHelp: "Capteur Home Assistant représentant la puissance instantanée de l’introduction électrique.",
+        entityTemperatureHelp: "Capteur Home Assistant représentant la température extérieure.",
+        errorUnknown: "Une opération a échoué. Consultez les détails techniques si le problème persiste.",
+        errorRead: "Impossible de relire les données dans VictoriaMetrics.",
+        errorReadAction: "Vérifiez l’URL du serveur puis relancez le test de connexion.",
+        errorWrite: "La base externe est joignable, mais l’écriture a échoué.",
+        errorWriteAction: "Vérifiez les droits d’écriture et les paramètres d’authentification.",
+        errorDelete: "L’écriture fonctionne, mais la suppression de test a échoué.",
+        errorDeleteAction: "Vérifiez deleteAuthKey et les droits de suppression avant d’activer la synchronisation automatique.",
+        errorHealth: "Impossible de joindre la base externe.",
+        errorHealthAction: "Vérifiez l’URL, le port et que le serveur est démarré.",
+        errorRecorder: "Recorder n’a pas pu terminer l’opération demandée.",
+        errorRecorderAction: "Vérifiez Recorder dans Home Assistant puis réessayez.",
+        errorAuth: "L’authentification de la base externe a été refusée.",
+        errorAuthAction: "Vérifiez l’utilisateur, le mot de passe ou le jeton.",
+        errorNotFound: "Le service demandé n’a pas été trouvé sur le serveur.",
+        errorNotFoundAction: "Vérifiez l’URL et le type de base sélectionné.",
+        errorTimeout: "La base externe n’a pas répondu à temps.",
+        errorTimeoutAction: "Vérifiez la disponibilité du serveur et le réseau, puis réessayez.",
+        errorDatabaseRequired: "Une base de données doit être renseignée pour cette destination.",
+        errorOrgBucketRequired: "L’organisation et le bucket doivent être renseignés pour InfluxDB 2.",
+        errorOverlap: "Cette période chevauche une période existante du même type.",
+        errorFutureEnd: "La date de fin ne peut pas être dans le futur.",
+        errorExportNotConfigured: "La base externe n’est pas encore configurée.",
+        errorTariffTotal: "La somme des consommations heures pleines et heures creuses doit être égale à la consommation totale.",
+        errorTariffCost: "La somme des coûts heures pleines et heures creuses doit être égale au coût total.",
+        errorTariffValues: "Les valeurs heures pleines / heures creuses ne sont pas valides.",
+        errorEndBeforeStart: "La date de fin doit être postérieure ou égale à la date de début.",
+        errorInvalidValue: "La consommation doit être supérieure à zéro.",
+        errorInvalidCost: "Le coût ne peut pas être négatif.",
+        errorPeriodNotFound: "La période sélectionnée n’existe plus.",
+        errorInvalidDistribution: "La méthode de répartition sélectionnée n’est pas valide.",
+        errorInvalidBaseTemp: "La température de base doit être comprise entre 5 et 30 °C.",
+        errorTemperatureSensorRequired: "Sélectionnez un capteur de température extérieure.",
+        errorApartmentExists: "Un logement portant ce nom existe déjà.",
+        errorInvalidName: "Le nom du logement n’est pas valide.",
+        errorApartmentCreate: "La création du logement a échoué.",
+        errorApartmentSetup: "Le logement a été créé mais son chargement dans Home Assistant a échoué.",
+        errorSafeRebuild: "Cette destination ne permet pas une reconstruction sûre avec suppression.",
+        errorDeleteUnsupported: "La suppression sûre n’est pas disponible pour cette destination.",
+        allocationUnits: "Unités de répartition"
       },
       en: {
         title: "Rental consumption",
@@ -249,6 +339,8 @@ class RentalConsumptionPanel extends HTMLElement {
         note: "Note",
         tariff: "Tariff",
         single: "Single",
+        peakLabel: "Peak",
+        offpeakLabel: "Off-peak",
         peakOffpeak: "Peak / off-peak",
         peakConsumption: "Peak consumption",
         offpeakConsumption: "Off-peak consumption",
@@ -275,13 +367,13 @@ class RentalConsumptionPanel extends HTMLElement {
         exportBackend: "Destination",
         none: "Disabled",
         url: "URL",
-        database: "Database",
-        retention: "Retention policy",
+        database: "Base de données",
+        retention: "Politique de rétention",
         organization: "Organization",
-        bucket: "Bucket",
+        bucket: "Bucket (compartiment)",
         username: "Username",
         password: "Password",
-        token: "Token",
+        token: "Jeton",
         deleteKey: "deleteAuthKey",
         autoSync: "Automatically sync after changes",
         test: "Test connection",
@@ -290,7 +382,7 @@ class RentalConsumptionPanel extends HTMLElement {
         syncing: "Rebuilding…",
         connectionOk: "Connection validated.",
         lastStatus: "Last status",
-        health: "Server",
+        health: "Server reachable",
         write: "Write",
         read: "Read",
         deleteStep: "Delete",
@@ -329,6 +421,8 @@ class RentalConsumptionPanel extends HTMLElement {
         latestPeriod: "Latest period",
         vsPrevious: "compared with the previous period",
         normalizedUse: "Consumption/day",
+        daysShort: "d",
+        perDay: "/day",
         trend: "Trend",
         trendUp: "Increasing",
         trendDown: "Decreasing",
@@ -339,7 +433,88 @@ class RentalConsumptionPanel extends HTMLElement {
         pvShare: "PV share",
         totalSupply: "Total supply",
         deterministicAnalysis: "Deterministic analysis based on stored periods and the same allocation used by Recorder.",
-        analysisLoadError: "Unable to calculate analysis data."
+        analysisLoadError: "Unable to calculate analysis data.",
+        noConfiguration: "No configuration.",
+        advancedSettings: "Advanced settings",
+        showAdvanced: "Show advanced settings",
+        hideAdvanced: "Hide advanced settings",
+        optionalAuth: "Authentication and optional settings",
+        optional: "Optional",
+        required: "Required",
+        unsavedChanges: "Unsaved changes",
+        unsavedPrompt: "Some changes are not saved. Discard them?",
+        technicalDetails: "Show technical details",
+        suggestedAction: "Suggested action",
+        statusPartial: "Partially functional",
+        stepOk: "OK",
+        stepFailed: "failed",
+        stepNotTested: "not tested",
+        openSettings: "Open settings",
+        fallbackNotice: "The complete load curve is unavailable. A fallback method is being used for at least one period.",
+        fallbackImpact: "Billed totals remain exact, but their distribution over time may be less precise.",
+        externalErrorNotice: "The external database reports a connection or synchronization error.",
+        externalErrorImpact: "Displayed figures remain available from stored periods and Recorder; only external export is affected unless an allocation method directly depends on it.",
+        baseExternalHelp: "Optional connection to VictoriaMetrics or InfluxDB to keep reconstructed data in an external historical database.",
+        syncDescription: "Deletes and rewrites the historical series owned by this dwelling. The operation may take a moment.",
+        providerHelp: "Company that supplies or distributes electricity for the period. In Switzerland, the DSO operates the distribution grid.",
+        recorderHelp: "Home Assistant's internal database used for history and long-term statistics.",
+        loadCurveHelp: "Measured power profile over time, used to distribute a bill across the days when energy was actually consumed.",
+        configuredDistributionHelp: "Method requested in settings before checking data availability.",
+        effectiveDistributionHelp: "Method actually applied after checking available data and fallbacks.",
+        coverageHelp: "Share of the period for which usable data is available.",
+        coverageAvailable: "Data available",
+        coverageAvailableFull: "Data available for the entire period",
+        weightedPeriodsHelp: "Periods distributed from measured data instead of uniformly.",
+        uniformPeriodsHelp: "Periods distributed uniformly because no reliable weighting data was available.",
+        singleTariffHelp: "One electricity tariff applies to the entire period.",
+        baseTempHelp: "Reference temperature used to calculate heating degree days.",
+        vmMetricHelp: "VictoriaMetrics metric containing the power values used for the load curve.",
+        vmDbHelp: "Value of the « db » label used to find Home Assistant series in VictoriaMetrics.",
+        deleteKeyHelp: "Optional key protecting VictoriaMetrics deletion operations when enabled on the server.",
+        tokenHelp: "Optional authentication token used by the external database or its access proxy.",
+        loadSourceHelp: "Data source used to reconstruct the curve: automatic, VictoriaMetrics, or Recorder.",
+        minCoverageHelp: "Minimum percentage of available data required before using the load curve instead of a fallback.",
+        entityPowerHelp: "Home Assistant sensor representing instantaneous incoming electrical power.",
+        entityTemperatureHelp: "Home Assistant sensor representing outdoor temperature.",
+        errorUnknown: "An operation failed. Check the technical details if the problem persists.",
+        errorRead: "Unable to read the data back from VictoriaMetrics.",
+        errorReadAction: "Check the server URL and retry the connection test.",
+        errorWrite: "The external database is reachable, but writing failed.",
+        errorWriteAction: "Check write permissions and authentication settings.",
+        errorDelete: "Writing works, but deleting the test point failed.",
+        errorDeleteAction: "Check deleteAuthKey and delete permissions before enabling automatic synchronization.",
+        errorHealth: "Unable to reach the external database.",
+        errorHealthAction: "Check the URL, port, and that the server is running.",
+        errorRecorder: "Recorder could not complete the requested operation.",
+        errorRecorderAction: "Check Recorder in Home Assistant and retry.",
+        errorAuth: "External database authentication was rejected.",
+        errorAuthAction: "Check the username, password, or token.",
+        errorNotFound: "The requested service was not found on the server.",
+        errorNotFoundAction: "Check the URL and selected database type.",
+        errorTimeout: "The external database did not respond in time.",
+        errorTimeoutAction: "Check server availability and network connectivity, then retry.",
+        errorDatabaseRequired: "A database must be provided for this destination.",
+        errorOrgBucketRequired: "Organization and bucket are required for InfluxDB 2.",
+        errorOverlap: "This period overlaps an existing period of the same type.",
+        errorFutureEnd: "The end date cannot be in the future.",
+        errorExportNotConfigured: "The external database is not configured yet.",
+        errorTariffTotal: "Peak and off-peak consumption must equal total consumption.",
+        errorTariffCost: "Peak and off-peak costs must equal total cost.",
+        errorTariffValues: "Peak / off-peak values are invalid.",
+        errorEndBeforeStart: "The end date must be on or after the start date.",
+        errorInvalidValue: "Consumption must be greater than zero.",
+        errorInvalidCost: "Cost cannot be negative.",
+        errorPeriodNotFound: "The selected period no longer exists.",
+        errorInvalidDistribution: "The selected allocation method is invalid.",
+        errorInvalidBaseTemp: "Base temperature must be between 5 and 30 °C.",
+        errorTemperatureSensorRequired: "Select an outdoor temperature sensor.",
+        errorApartmentExists: "A dwelling with this name already exists.",
+        errorInvalidName: "The dwelling name is invalid.",
+        errorApartmentCreate: "Creating the dwelling failed.",
+        errorApartmentSetup: "The dwelling was created but could not be loaded in Home Assistant.",
+        errorSafeRebuild: "This destination does not support a safe delete-and-rebuild.",
+        errorDeleteUnsupported: "Safe deletion is not available for this destination.",
+        allocationUnits: "Allocation units"
       }
     };
     return t[this._lang][key] ?? key;
@@ -353,7 +528,7 @@ class RentalConsumptionPanel extends HTMLElement {
         this._selectedEntryId = this._data.entries[0].entry_id;
       }
     } catch (error) {
-      this._message = { kind: "error", text: this._friendlyError(error) };
+      this._message = this._errorMessage(error);
     }
     this._render();
   }
@@ -374,7 +549,7 @@ class RentalConsumptionPanel extends HTMLElement {
         this._analysisEntryId = entry.entry_id;
       }
     } catch (error) {
-      this._message = { kind: "error", text: `${this._t("analysisLoadError")} ${this._friendlyError(error)}` };
+      this._message = this._errorMessage(error, this._t("analysisLoadError"));
     } finally {
       this._analysisLoading = false;
       this._render();
@@ -428,6 +603,87 @@ class RentalConsumptionPanel extends HTMLElement {
     return value === "peak_offpeak" ? this._t("peakOffpeak") : this._t("single");
   }
 
+  _helpIcon(helpKey) {
+    const text = this._t(helpKey);
+    return `<span class="help-icon" tabindex="0" role="img" aria-label="${this._escape(text)}" data-tooltip="${this._escape(text)}">?</span>`;
+  }
+
+  _fieldLabel(label, helpKey = null, options = {}) {
+    const marker = options.required ? `<span class="required-marker" aria-label="${this._t("required")}">*</span>` : options.optional ? `<span class="optional-marker">${this._t("optional")}</span>` : "";
+    return `<span class="field-label"><span>${label}${marker}</span>${helpKey ? this._helpIcon(helpKey) : ""}</span>`;
+  }
+
+  _entityPicker(name, value, deviceClass, helpKey) {
+    const id = `picker-${name}`;
+    return `<div class="entity-picker-wrap"><ha-entity-picker id="${id}" data-hidden-name="${name}" data-value="${this._escape(value || "")}" data-device-class="${deviceClass}" allow-custom-entity show-entity-id></ha-entity-picker><input class="entity-picker-fallback" data-picker-fallback="${name}" value="${this._escape(value || "")}" placeholder="sensor.exemple"><input type="hidden" name="${name}" value="${this._escape(value || "")}"><small>${this._t(helpKey)}</small></div>`;
+  }
+
+  _technicalDetail(raw) {
+    const detail = String(raw ?? "").trim();
+    if (!detail) return "";
+    return `<details class="technical-details"><summary>${this._t("technicalDetails")}</summary><pre>${this._escape(detail)}</pre></details>`;
+  }
+
+  _errorPresentation(error) {
+    const raw = String(error?.message || error || "");
+    const code = classifyError(raw);
+    const map = {
+      tariff_total_mismatch: ["errorTariffTotal", null],
+      tariff_cost_mismatch: ["errorTariffCost", null],
+      invalid_tariff_values: ["errorTariffValues", null],
+      end_before_start: ["errorEndBeforeStart", null],
+      invalid_value: ["errorInvalidValue", null],
+      invalid_cost: ["errorInvalidCost", null],
+      period_not_found: ["errorPeriodNotFound", null],
+      invalid_distribution: ["errorInvalidDistribution", null],
+      invalid_base_temperature: ["errorInvalidBaseTemp", null],
+      temperature_sensor_required: ["errorTemperatureSensorRequired", null],
+      apartment_exists: ["errorApartmentExists", null],
+      invalid_name: ["errorInvalidName", null],
+      apartment_create_failed: ["errorApartmentCreate", null],
+      apartment_setup_failed: ["errorApartmentSetup", null],
+      read_failed: ["errorRead", "errorReadAction"],
+      write_failed: ["errorWrite", "errorWriteAction"],
+      delete_failed: ["errorDelete", "errorDeleteAction"],
+      health_failed: ["errorHealth", "errorHealthAction"],
+      recorder_unavailable: ["errorRecorder", "errorRecorderAction"],
+      recorder_error: ["errorRecorder", "errorRecorderAction"],
+      http_401: ["errorAuth", "errorAuthAction"],
+      http_403: ["errorAuth", "errorAuthAction"],
+      http_404: ["errorNotFound", "errorNotFoundAction"],
+      timeout: ["errorTimeout", "errorTimeoutAction"],
+      database_required: ["errorDatabaseRequired", null],
+      org_bucket_required: ["errorOrgBucketRequired", null],
+      overlap: ["errorOverlap", null],
+      future_end: ["errorFutureEnd", null],
+      export_not_configured: ["errorExportNotConfigured", null],
+      safe_rebuild_not_supported: ["errorSafeRebuild", null],
+      delete_not_supported: ["errorDeleteUnsupported", null]
+    };
+    const keys = map[code] || ["errorUnknown", null];
+    return { code, text: this._t(keys[0]), action: keys[1] ? this._t(keys[1]) : "", detail: raw };
+  }
+
+  _errorMessage(error, prefix = "") {
+    const info = this._errorPresentation(error);
+    return { kind: "error", text: `${prefix}${prefix ? " " : ""}${info.text}`, action: info.action, detail: info.detail };
+  }
+
+  _messageMarkup() {
+    if (!this._message) return "";
+    return `<div class="message ${this._message.kind}" role="status" aria-live="polite"><div>${this._escape(this._message.text)}</div>${this._message.action ? `<div class="message-action"><strong>${this._t("suggestedAction")} :</strong> ${this._escape(this._message.action)}</div>` : ""}${this._message.detail ? this._technicalDetail(this._message.detail) : ""}</div>`;
+  }
+
+  _confirmDiscardChanges() {
+    if (!this._settingsDirty && !this._exportDirty) return true;
+    return confirm(this._t("unsavedPrompt"));
+  }
+
+  _coverageText(value) {
+    const percent = coverageToPercent(value || 0);
+    return percent >= 99.95 ? this._t("coverageAvailableFull") : `${this._num(percent, 1)} %`;
+  }
+
   _render() {
     if (!this._data) {
       this.shadowRoot.innerHTML = `<style>${this._styles()}</style><main><div class="loading">…</div></main>`;
@@ -435,7 +691,7 @@ class RentalConsumptionPanel extends HTMLElement {
     }
     const entry = this._entry;
     if (!entry) {
-      this.shadowRoot.innerHTML = `<style>${this._styles()}</style><main><h1>${this._t("title")}</h1><p>Aucune configuration.</p></main>`;
+      this.shadowRoot.innerHTML = `<style>${this._styles()}</style><main><h1>${this._t("title")}</h1><p>${this._t("noConfiguration")}</p></main>`;
       return;
     }
 
@@ -446,7 +702,7 @@ class RentalConsumptionPanel extends HTMLElement {
           <div><h1>${this._t("title")}</h1><p>${this._t("subtitle")}</p></div>
           <button class="icon-button" data-action="refresh" title="${this._t("refresh")}">↻</button>
         </header>
-        ${this._message ? `<div class="message ${this._message.kind}">${this._escape(this._message.text)}</div>` : ""}
+        ${this._messageMarkup()}
         <section class="card picker-card">
           <div class="picker-row">
             <label><span>${this._t("apartment")}</span><select id="entry-select">${this._data.entries.map((item) => `<option value="${item.entry_id}" ${item.entry_id === entry.entry_id ? "selected" : ""}>${this._escape(item.title)}</option>`).join("")}</select></label>
@@ -480,7 +736,7 @@ class RentalConsumptionPanel extends HTMLElement {
           <form id="apartment-form">
             <div class="form-grid">
               ${this._field(this._t("apartmentName"), `<input name="apartment_name" required value="${addMode ? "" : this._escape(entry.title)}" autofocus>`)}
-              ${addMode ? this._field(this._t("heatingUnit"), `<select name="heating_unit"><option value="kWh" ${settings.heating_unit === "kWh" ? "selected" : ""}>kWh</option><option value="MWh" ${settings.heating_unit === "MWh" ? "selected" : ""}>MWh</option><option value="GJ" ${settings.heating_unit === "GJ" ? "selected" : ""}>GJ</option><option value="allocation_units" ${settings.heating_unit === "allocation_units" ? "selected" : ""}>Unités de répartition</option></select>`) : ""}
+              ${addMode ? this._field(this._t("heatingUnit"), `<select name="heating_unit"><option value="kWh" ${settings.heating_unit === "kWh" ? "selected" : ""}>kWh</option><option value="MWh" ${settings.heating_unit === "MWh" ? "selected" : ""}>MWh</option><option value="GJ" ${settings.heating_unit === "GJ" ? "selected" : ""}>GJ</option><option value="allocation_units" ${settings.heating_unit === "allocation_units" ? "selected" : ""}>${this._t("allocationUnits")}</option></select>`) : ""}
               ${addMode ? this._field(this._t("providerDefault"), `<input name="grid_operator" value="${this._escape(settings.grid_operator || "")}">`) : ""}
               ${addMode ? this._field(this._t("currency"), `<input name="currency" value="${this._escape(settings.currency || "CHF")}">`) : ""}
             </div>
@@ -507,6 +763,7 @@ class RentalConsumptionPanel extends HTMLElement {
     const types = ["water", "hot_water", "heating", "electricity", "pv_electricity"];
     const exportStatus = entry.export?.last_status || {};
     return `
+      ${this._overviewNotices(entry)}
       <section class="summary-grid">
         ${types.map((type) => `<article class="summary-card"><span>${this._typeLabel(type)}</span><strong>${this._num(entry.totals[type], 3)} <small>${this._escape(entry.units[type])}</small></strong><div>${this._num(entry.costs[type]?.total, 2)} ${this._escape(entry.units.currency)}</div><small>${entry.costs[type]?.average_unit_price == null ? "—" : `${this._num(entry.costs[type].average_unit_price, 4)} ${this._escape(entry.units.unit_prices[type])}`}</small></article>`).join("")}
       </section>
@@ -515,6 +772,20 @@ class RentalConsumptionPanel extends HTMLElement {
         <article class="card compact-card"><h2>${this._t("heating")}</h2>${this._analysisSummary(entry.heating_analysis, true)}</article>
         <article class="card compact-card"><h2>${this._t("exportSettings")}</h2>${this._exportStatus(entry, exportStatus, true)}</article>
       </section>`;
+  }
+
+  _overviewNotices(entry) {
+    const electricity = entry.electricity_analysis || {};
+    const fallback = Number(electricity.fallback_periods || 0) > 0 || (electricity.configured_distribution === "load_curve" && electricity.effective_distribution !== "load_curve");
+    const externalError = entry.export?.backend !== "none" && entry.export?.last_status?.status === "error";
+    const alerts = [];
+    if (fallback) {
+      alerts.push(`<div class="context-alert warning-alert"><div><strong>${this._t("fallbackNotice")}</strong><div>${this._t("fallbackImpact")}</div></div><button class="button" data-action="open-settings">${this._t("openSettings")}</button></div>`);
+    }
+    if (externalError) {
+      alerts.push(`<div class="context-alert error-alert"><div><strong>${this._t("externalErrorNotice")}</strong><div>${this._t("externalErrorImpact")}</div></div><button class="button" data-action="open-settings-advanced">${this._t("openSettings")}</button></div>`);
+    }
+    return alerts.join("");
   }
 
   _periodsTab(entry) {
@@ -530,7 +801,7 @@ class RentalConsumptionPanel extends HTMLElement {
       <section class="card history-card">
         <div class="section-header">
           <div><h2>${this._t("history")}</h2><span class="muted">${filtered.length} ${this._t("periods").toLowerCase()}</span></div>
-          <button class="button subtle" data-action="rebuild" ${this._busyAction ? "disabled" : ""}>${this._busyAction === "rebuild" ? "…" : this._t("rebuild")}</button>
+          <button class="button subtle" data-action="rebuild" ${this._busyAction ? "disabled" : ""} title="${this._escape(this._t("recorderHelp"))}">${this._busyAction === "rebuild" ? "…" : this._t("rebuild")}</button>
         </div>
         <div class="history-toolbar">
           <select id="history-type"><option value="all">${this._t("allTypes")}</option>${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((type) => `<option value="${type}" ${this._historyType === type ? "selected" : ""}>${this._typeLabel(type)}</option>`).join("")}</select>
@@ -570,7 +841,7 @@ class RentalConsumptionPanel extends HTMLElement {
       </section>
       <section class="analysis-kpi-grid">
         <article class="card compact-card"><span>${this._t("latestPeriod")}</span><strong>${latest ? `${this._num(latest.consumption,3)} ${this._escape(typeData.unit||"")}` : "—"}</strong><small>${latest ? `${this._date(latest.start_date)} – ${this._date(latest.end_date)}` : "—"}</small></article>
-        <article class="card compact-card"><span>${this._t("normalizedUse")}</span><strong>${latest ? `${this._num(latest.daily_average,3)} ${this._escape(typeData.unit||"")}/j` : "—"}</strong>${this._changeBadge(changes.daily_average_pct)}</article>
+        <article class="card compact-card"><span>${this._t("normalizedUse")}</span><strong>${latest ? `${this._num(latest.daily_average,3)} ${this._escape(typeData.unit||"")}${this._t("perDay")}` : "—"}</strong>${this._changeBadge(changes.daily_average_pct)}</article>
         <article class="card compact-card"><span>${this._t("totalCost")}</span><strong>${latest?.cost == null ? "—" : `${this._num(latest.cost,2)} ${this._escape(typeData.currency||entry.units.currency)}`}</strong>${this._changeBadge(changes.cost_pct)}</article>
         <article class="card compact-card"><span>${this._t("unitPrice")}</span><strong>${latest?.unit_price == null ? "—" : `${this._num(latest.unit_price,4)} ${this._escape(entry.units.unit_prices?.[this._analysisType]||"")}`}</strong>${this._changeBadge(changes.unit_price_pct)}</article>
         <article class="card compact-card"><span>${this._t("trend")}</span><strong>${trendLabel}</strong><small>${this._t("vsPrevious")}</small></article>
@@ -633,106 +904,120 @@ class RentalConsumptionPanel extends HTMLElement {
   _settingsTab(entry) {
     const settings = entry.settings;
     const exportSettings = entry.export || {};
+    const minCoveragePercent = coverageToPercent(settings.load_curve_min_coverage ?? 0.9);
     return `
       <form id="settings-form">
         <section class="card settings-card">
           <div class="section-header"><div><h2>${this._t("general")}</h2></div></div>
           <div class="form-grid">
-            ${this._field(this._t("providerDefault"), `<input name="grid_operator" value="${this._escape(settings.grid_operator || "")}"><small>${this._t("providerDefaultHelp")}</small>`)}
-            ${this._field(this._t("currency"), `<input name="currency" value="${this._escape(settings.currency || "CHF")}">`)}
+            ${this._field(this._t("providerDefault"), `<input name="grid_operator" value="${this._escape(settings.grid_operator || "")}">`, { helpKey: "providerHelp", optional: true })}
+            ${this._field(this._t("currency"), `<input name="currency" value="${this._escape(settings.currency || "CHF")}" required>`, { required: true })}
           </div>
         </section>
         <section class="card settings-card">
           <h2>${this._t("heatingSettings")}</h2>
           <div class="form-grid">
-            ${this._field(this._t("heatingDistribution"), `<select name="heating_distribution"><option value="uniform_daily" ${settings.heating_distribution === "uniform_daily" ? "selected" : ""}>${this._t("uniform")}</option><option value="outdoor_temperature" ${settings.heating_distribution === "outdoor_temperature" ? "selected" : ""}>${this._t("degreeDays")}</option></select>`)}
-            ${this._field(this._t("outdoorSensor"), `<input name="outdoor_temperature_sensor" value="${this._escape(settings.outdoor_temperature_sensor || "")}" placeholder="sensor.temperature_exterieure">`)}
-            ${this._field(this._t("baseTemp"), `<input name="heating_base_temperature" type="number" min="5" max="30" step="0.1" value="${this._escape(settings.heating_base_temperature ?? 20)}">`)}
+            ${this._field(this._t("heatingDistribution"), `<select name="heating_distribution"><option value="uniform_daily" ${settings.heating_distribution === "uniform_daily" ? "selected" : ""}>${this._t("uniform")}</option><option value="outdoor_temperature" ${settings.heating_distribution === "outdoor_temperature" ? "selected" : ""}>${this._t("degreeDays")}</option></select>`, { helpKey: "configuredDistributionHelp", required: true })}
+            ${this._field(this._t("outdoorSensor"), this._entityPicker("outdoor_temperature_sensor", settings.outdoor_temperature_sensor || "", "temperature", "entityTemperatureHelp"), { helpKey: "entityTemperatureHelp", optional: true })}
           </div>
         </section>
         <section class="card settings-card">
           <h2>${this._t("electricitySettings")}</h2>
           <div class="form-grid">
-            ${this._field(this._t("electricityDistribution"), `<select name="electricity_distribution"><option value="uniform_daily" ${settings.electricity_distribution === "uniform_daily" ? "selected" : ""}>${this._t("uniform")}</option><option value="load_curve" ${settings.electricity_distribution === "load_curve" ? "selected" : ""}>${this._t("loadCurve")}</option></select>`)}
-            ${this._field(this._t("loadSensor"), `<input name="electricity_load_sensor" value="${this._escape(settings.electricity_load_sensor || "")}" placeholder="sensor.introduction_puissance">`)}
-            ${this._field(this._t("loadSource"), `<select name="load_curve_source"><option value="auto" ${settings.load_curve_source === "auto" ? "selected" : ""}>${this._t("auto")}</option><option value="victoriametrics" ${settings.load_curve_source === "victoriametrics" ? "selected" : ""}>${this._t("victoriametrics")}</option><option value="recorder" ${settings.load_curve_source === "recorder" ? "selected" : ""}>${this._t("recorder")}</option></select>`)}
-            ${this._field(this._t("minCoverage"), `<input name="load_curve_min_coverage" type="number" min="0.1" max="1" step="0.01" value="${this._escape(settings.load_curve_min_coverage ?? 0.9)}">`)}
-            ${this._field(this._t("vmMetric"), `<input name="vm_load_metric" value="${this._escape(settings.vm_load_metric || "W_value")}">`)}
-            ${this._field(this._t("vmDb"), `<input name="vm_load_db_label" value="${this._escape(settings.vm_load_db_label || "homeassistant")}">`)}
-            <div class="help wide">${this._t("loadHelp")}</div>
+            ${this._field(this._t("electricityDistribution"), `<select name="electricity_distribution"><option value="uniform_daily" ${settings.electricity_distribution === "uniform_daily" ? "selected" : ""}>${this._t("uniform")}</option><option value="load_curve" ${settings.electricity_distribution === "load_curve" ? "selected" : ""}>${this._t("loadCurve")}</option></select>`, { helpKey: "loadCurveHelp", required: true })}
+            ${this._field(this._t("loadSensor"), this._entityPicker("electricity_load_sensor", settings.electricity_load_sensor || "", "power", "entityPowerHelp"), { helpKey: "entityPowerHelp", optional: true })}
           </div>
         </section>
+        <section class="card settings-card advanced-toggle-card">
+          <button class="button subtle advanced-toggle" type="button" data-action="toggle-advanced">${this._advancedSettingsOpen ? "▾" : "▸"} ${this._t("advancedSettings")}</button>
+          <div id="advanced-settings-content" class="advanced-content ${this._advancedSettingsOpen ? "" : "hidden"}">
+            <div class="form-grid">
+              ${this._field(this._t("baseTemp"), `<input name="heating_base_temperature" type="number" min="5" max="30" step="0.1" value="${this._escape(settings.heating_base_temperature ?? 20)}">`, { helpKey: "baseTempHelp", optional: true })}
+              ${this._field(this._t("loadSource"), `<select name="load_curve_source"><option value="auto" ${settings.load_curve_source === "auto" ? "selected" : ""}>${this._t("auto")}</option><option value="victoriametrics" ${settings.load_curve_source === "victoriametrics" ? "selected" : ""}>${this._t("victoriametrics")}</option><option value="recorder" ${settings.load_curve_source === "recorder" ? "selected" : ""}>${this._t("recorder")}</option></select>`, { helpKey: "loadSourceHelp", optional: true })}
+              ${this._field(this._t("minCoverage"), `<div class="input-unit"><input name="load_curve_min_coverage_percent" type="number" min="10" max="100" step="1" value="${this._escape(minCoveragePercent)}"><span>%</span></div>`, { helpKey: "minCoverageHelp", optional: true })}
+              ${this._field(this._t("vmMetric"), `<input name="vm_load_metric" value="${this._escape(settings.vm_load_metric || "W_value")}">`, { helpKey: "vmMetricHelp", optional: true })}
+              ${this._field(this._t("vmDb"), `<input name="vm_load_db_label" value="${this._escape(settings.vm_load_db_label || "homeassistant")}">`, { helpKey: "vmDbHelp", optional: true })}
+            </div>
+            <div class="help">${this._t("loadHelp")}</div>
+          </div>
+        </section>
+        <div class="unsaved-warning ${this._settingsDirty ? "" : "hidden"}" data-unsaved="settings">● ${this._t("unsavedChanges")}</div>
         <div class="sticky-actions"><button class="button primary" type="submit" ${this._busyAction ? "disabled" : ""}>${this._t("saveGeneral")}</button></div>
       </form>
-      ${this._exportSettingsCard(entry, exportSettings)}`;
+      <div id="advanced-export-wrapper" class="${this._advancedSettingsOpen ? "" : "hidden"}">${this._exportSettingsCard(entry, exportSettings)}</div>`;
   }
-
   _exportSettingsCard(entry, exportSettings) {
     const backend = exportSettings.backend || "none";
     const status = exportSettings.last_status || {};
     return `
       <section class="card settings-card" id="export-card">
-        <div class="section-header"><div><h2>${this._t("exportSettings")}</h2></div></div>
+        <div class="section-header"><div><h2>${this._t("exportSettings")}</h2><p class="muted">${this._t("baseExternalHelp")}</p></div></div>
         <form id="export-form">
           <div class="form-grid">
-            ${this._field(this._t("exportBackend"), `<select name="export_backend" id="export-backend"><option value="none" ${backend === "none" ? "selected" : ""}>${this._t("none")}</option><option value="victoriametrics" ${backend === "victoriametrics" ? "selected" : ""}>VictoriaMetrics</option><option value="influxdb_v1" ${backend === "influxdb_v1" ? "selected" : ""}>InfluxDB 1.x</option><option value="influxdb_v2" ${backend === "influxdb_v2" ? "selected" : ""}>InfluxDB 2.x</option><option value="influxdb_v3" ${backend === "influxdb_v3" ? "selected" : ""}>InfluxDB 3.x</option></select>`)}
-            <label class="backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v2 influxdb_v3"><span>${this._t("url")}</span><input name="export_url" value="${this._escape(exportSettings.url || "")}" placeholder="http://192.168.1.10:8428"></label>
-            <label class="backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v3"><span>${this._t("database")}</span><input name="export_database" value="${this._escape(exportSettings.database || "")}"></label>
-            <label class="backend-field" data-backends="influxdb_v1"><span>${this._t("retention")}</span><input name="export_retention_policy" value="${this._escape(exportSettings.retention_policy || "")}"></label>
-            <label class="backend-field" data-backends="influxdb_v2"><span>${this._t("organization")}</span><input name="export_org" value="${this._escape(exportSettings.org || "")}"></label>
-            <label class="backend-field" data-backends="influxdb_v2"><span>${this._t("bucket")}</span><input name="export_bucket" value="${this._escape(exportSettings.bucket || "")}"></label>
-            <label class="backend-field" data-backends="victoriametrics influxdb_v1"><span>${this._t("username")}</span><input name="export_username" value="${this._escape(exportSettings.username || "")}"></label>
-            <label class="backend-field" data-backends="victoriametrics influxdb_v1"><span>${this._t("password")}</span><input name="export_password" type="password" placeholder="${exportSettings.has_password ? "••••••••" : ""}"></label>
-            <label class="backend-field" data-backends="victoriametrics influxdb_v2 influxdb_v3"><span>${this._t("token")}</span><input name="export_token" type="password" placeholder="${exportSettings.has_token ? "••••••••" : ""}"></label>
-            <label class="backend-field" data-backends="victoriametrics"><span>${this._t("deleteKey")}</span><input name="export_delete_auth_key" type="password" placeholder="${exportSettings.has_delete_auth_key ? "••••••••" : ""}"></label>
-            <label class="check wide backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v2"><input name="export_auto_sync" type="checkbox" ${exportSettings.auto_sync ? "checked" : ""}> ${this._t("autoSync")}</label>
-            <div class="help wide backend-field" data-backends="victoriametrics">${this._t("vmHelp")}</div>
-            <div class="warning wide backend-field" data-backends="influxdb_v3">${this._t("v3Warning")}</div>
+            ${this._field(this._t("exportBackend"), `<select name="export_backend" id="export-backend"><option value="none" ${backend === "none" ? "selected" : ""}>${this._t("none")}</option><option value="victoriametrics" ${backend === "victoriametrics" ? "selected" : ""}>VictoriaMetrics</option><option value="influxdb_v1" ${backend === "influxdb_v1" ? "selected" : ""}>InfluxDB 1.x</option><option value="influxdb_v2" ${backend === "influxdb_v2" ? "selected" : ""}>InfluxDB 2.x</option><option value="influxdb_v3" ${backend === "influxdb_v3" ? "selected" : ""}>InfluxDB 3.x</option></select>`, { required: true })}
+            <label class="backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v2 influxdb_v3">${this._fieldLabel(this._t("url"), null, { required: true })}<input name="export_url" value="${this._escape(exportSettings.url || "")}" placeholder="http://192.168.1.10:8428"></label>
+            <label class="backend-field" data-backends="influxdb_v1 influxdb_v3">${this._fieldLabel(this._t("database"), null, { required: true })}<input name="export_database" value="${this._escape(exportSettings.database || "")}"></label>
+            <label class="backend-field" data-backends="influxdb_v2">${this._fieldLabel(this._t("organization"), null, { required: true })}<input name="export_org" value="${this._escape(exportSettings.org || "")}"></label>
+            <label class="backend-field" data-backends="influxdb_v2">${this._fieldLabel(this._t("bucket"), null, { required: true })}<input name="export_bucket" value="${this._escape(exportSettings.bucket || "")}"></label>
           </div>
+          <details class="backend-options backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v2 influxdb_v3">
+            <summary>${this._t("optionalAuth")}</summary>
+            <div class="form-grid options-grid">
+              <label class="backend-field" data-backends="victoriametrics">${this._fieldLabel(this._t("database"), null, { optional: true })}<input name="export_database_vm" value="${this._escape(exportSettings.database || "")}"></label>
+              <label class="backend-field" data-backends="influxdb_v1">${this._fieldLabel(this._t("retention"), null, { optional: true })}<input name="export_retention_policy" value="${this._escape(exportSettings.retention_policy || "")}"></label>
+              <label class="backend-field" data-backends="victoriametrics influxdb_v1">${this._fieldLabel(this._t("username"), null, { optional: true })}<input name="export_username" value="${this._escape(exportSettings.username || "")}"></label>
+              <label class="backend-field" data-backends="victoriametrics influxdb_v1">${this._fieldLabel(this._t("password"), null, { optional: true })}<input name="export_password" type="password" placeholder="${exportSettings.has_password ? "••••••••" : ""}"></label>
+              <label class="backend-field" data-backends="victoriametrics influxdb_v2 influxdb_v3">${this._fieldLabel(this._t("token"), "tokenHelp", { optional: true })}<input name="export_token" type="password" placeholder="${exportSettings.has_token ? "••••••••" : ""}"></label>
+              <label class="backend-field" data-backends="victoriametrics">${this._fieldLabel(this._t("deleteKey"), "deleteKeyHelp", { optional: true })}<input name="export_delete_auth_key" type="password" placeholder="${exportSettings.has_delete_auth_key ? "••••••••" : ""}"></label>
+              <label class="check wide backend-field" data-backends="victoriametrics influxdb_v1 influxdb_v2"><input name="export_auto_sync" type="checkbox" ${exportSettings.auto_sync ? "checked" : ""}> ${this._t("autoSync")}</label>
+            </div>
+          </details>
+          <div class="help backend-field" data-backends="victoriametrics">${this._t("vmHelp")}</div>
+          <div class="warning backend-field" data-backends="influxdb_v3">${this._t("v3Warning")}</div>
+          <div class="unsaved-warning ${this._exportDirty ? "" : "hidden"}" data-unsaved="export">● ${this._t("unsavedChanges")}</div>
           <div class="export-actions">
             <button class="button" type="submit" ${this._busyAction ? "disabled" : ""}>${this._t("save")}</button>
-            <button class="button" type="button" data-action="test-export" ${this._busyAction ? "disabled" : ""}>${this._busyAction === "test-export" ? this._t("testing") : this._t("test")}</button>
+            <button class="button primary" type="button" data-action="test-export" ${this._busyAction ? "disabled" : ""}>${this._busyAction === "test-export" ? this._t("testing") : this._t("test")}</button>
             <button class="button" type="button" data-action="sync-export" ${(this._busyAction || !exportSettings.capabilities?.supports_safe_rebuild) ? "disabled" : ""}>${this._busyAction === "sync-export" ? this._t("syncing") : this._t("sync")}</button>
           </div>
+          <div class="action-description">${this._t("syncDescription")}</div>
         </form>
         ${this._exportStatus(entry, status, false)}
       </section>`;
   }
-
   _exportStatus(entry, status, compact) {
-    const state = status.status || "never";
-    const stateLabel = state === "ok" ? this._t("statusOk") : state === "error" ? this._t("statusError") : state === "testing" ? this._t("statusTesting") : this._t("never");
     const steps = status.steps || {};
+    const level = exportStatusLevel(status.status || "never", steps);
+    const stateLabel = status.status === "testing" ? this._t("statusTesting") : level === "ok" ? this._t("statusOk") : level === "warning" ? this._t("statusPartial") : level === "error" ? this._t("statusError") : this._t("never");
     const stepLabels = { health: this._t("health"), write: this._t("write"), read: this._t("read"), delete: this._t("deleteStep"), rebuild: this._t("rebuildStep") };
-    return `<div class="export-status ${compact ? "compact-status" : ""}">
-      <div class="status-head"><span class="status-dot ${state}"></span><strong>${stateLabel}</strong><span class="muted">${status.at ? this._dateTime(status.at) : ""}</span></div>
-      ${status.message && status.message !== "connection_test" ? `<div class="status-message">${this._escape(status.message)}</div>` : ""}
-      ${Object.keys(steps).length ? `<div class="status-steps">${Object.entries(steps).map(([key, value]) => `<span class="step ${value === "ok" ? "ok" : "error"}">${value === "ok" ? "✓" : "!"} ${this._escape(stepLabels[key] || key)}</span>`).join("")}</div>` : ""}
+    const errorInfo = status.status === "error" && status.message ? this._errorPresentation(status.message) : null;
+    return `<div class="export-status ${compact ? "compact-status" : ""} level-${level}">
+      <div class="status-head"><span class="status-dot ${level}"></span><strong>${stateLabel}</strong><span class="muted">${status.at ? this._dateTime(status.at) : ""}</span></div>
+      ${errorInfo ? `<div class="status-message">${this._escape(errorInfo.text)}</div>${errorInfo.action ? `<div class="status-action"><strong>${this._t("suggestedAction")} :</strong> ${this._escape(errorInfo.action)}</div>` : ""}${this._technicalDetail(errorInfo.detail)}` : ""}
+      ${status.message && status.status === "ok" && status.message.startsWith("full_sync:") ? `<div class="status-message">${this._t("syncSuccess")}</div>` : ""}
+      ${Object.keys(steps).length ? `<div class="status-steps">${Object.entries(steps).map(([key, value]) => `<span class="step ${value === "ok" ? "ok" : "error"}">${this._escape(stepLabels[key] || key)} : ${value === "ok" ? this._t("stepOk") : this._t("stepFailed")}</span>`).join("")}</div>` : ""}
       ${entry.export?.backend === "none" && compact ? `<div class="muted">${this._t("exportInactive")}</div>` : ""}
     </div>`;
   }
-
   _analysisSummary(analysis, heating) {
     const coverage = heating ? analysis?.temperature_coverage : analysis?.coverage;
     return `<div class="analysis-mini">
-      <div><span>${this._t("effectiveDistribution")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
-      <div><span>${this._t("coverage")}</span><strong>${this._num((coverage || 0) * 100, 1)} %</strong></div>
-      <div><span>${this._t("source")}</span><strong>${this._escape(heating ? (analysis?.outdoor_temperature_sensor || "—") : (analysis?.source || "—"))}</strong></div>
+      <div><span>${this._t("effectiveDistribution")} ${this._helpIcon("effectiveDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
+      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._coverageText(coverage)}</strong></div>
+      <div><span>${this._t("source")} ${!heating ? this._helpIcon("loadSourceHelp") : ""}</span><strong>${this._escape(heating ? (analysis?.outdoor_temperature_sensor || "—") : (analysis?.source || "—"))}</strong></div>
     </div>`;
   }
-
   _analysisDetails(analysis, heating) {
     const coverage = heating ? analysis?.temperature_coverage : analysis?.coverage;
     return `<div class="analysis-grid">
-      <div><span>${this._t("configuredDistribution")}</span><strong>${this._distributionLabel(analysis?.configured_distribution)}</strong></div>
-      <div><span>${this._t("effectiveDistribution")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
-      <div><span>${heating ? this._t("temperatureCoverage") : this._t("coverage")}</span><strong>${this._num((coverage || 0) * 100, 1)} %</strong></div>
-      <div><span>${this._t("weightedPeriods")}</span><strong>${analysis?.weighted_periods || 0}</strong></div>
-      <div><span>${this._t("fallbackPeriods")}</span><strong>${analysis?.fallback_periods || 0}</strong></div>
-      ${heating ? `<div><span>${this._t("meanTemperature")}</span><strong>${analysis?.mean_outdoor_temperature == null ? "—" : `${this._num(analysis.mean_outdoor_temperature, 1)} °C`}</strong></div>` : `<div><span>${this._t("source")}</span><strong>${this._escape(analysis?.source || "—")}</strong></div>`}
+      <div><span>${this._t("configuredDistribution")} ${this._helpIcon("configuredDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.configured_distribution)}</strong></div>
+      <div><span>${this._t("effectiveDistribution")} ${this._helpIcon("effectiveDistributionHelp")}</span><strong>${this._distributionLabel(analysis?.effective_distribution)}</strong></div>
+      <div><span>${this._t("coverageAvailable")} ${this._helpIcon("coverageHelp")}</span><strong>${this._coverageText(coverage)}</strong></div>
+      <div><span>${this._t("weightedPeriods")} ${this._helpIcon("weightedPeriodsHelp")}</span><strong>${analysis?.weighted_periods || 0}</strong></div>
+      <div><span>${this._t("fallbackPeriods")} ${this._helpIcon("uniformPeriodsHelp")}</span><strong>${analysis?.fallback_periods || 0}</strong></div>
+      ${heating ? `<div><span>${this._t("meanTemperature")}</span><strong>${analysis?.mean_outdoor_temperature == null ? "—" : `${this._num(analysis.mean_outdoor_temperature, 1)} °C`}</strong></div>` : `<div><span>${this._t("source")} ${this._helpIcon("loadSourceHelp")}</span><strong>${this._escape(analysis?.source || "—")}</strong></div>`}
     </div>`;
   }
-
   _periodForm(entry) {
     const period = this._editingPeriodId ? entry.periods.find((item) => item.period_id === this._editingPeriodId) : null;
     const type = period?.consumption_type || "electricity";
@@ -746,10 +1031,10 @@ class RentalConsumptionPanel extends HTMLElement {
         ${this._field(this._t("type"), `<select name="consumption_type" id="consumption-type">${["electricity", "pv_electricity", "water", "hot_water", "heating"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${this._typeLabel(item)}</option>`).join("")}</select>`)}
         ${this._field(this._t("start"), `<input name="start_date" type="date" value="${period?.start_date || ""}" required>`)}
         ${this._field(this._t("end"), `<input name="end_date" type="date" value="${period?.end_date || ""}" required>`)}
-        ${this._field(this._t("provider"), `<input name="provider" value="${this._escape(provider)}" placeholder="${this._escape(entry.settings.grid_operator || "")}">`)}
+        ${this._field(this._t("provider"), `<input name="provider" value="${this._escape(provider)}" placeholder="${this._escape(entry.settings.grid_operator || "")}">`, { helpKey: "providerHelp", optional: true })}
         ${this._field(this._t("consumption"), `<div class="input-unit"><input name="value" type="number" min="0.001" step="any" value="${period?.value ?? ""}" required><span id="value-unit">${this._escape(entry.units[type])}</span></div>`)}
         ${this._field(this._t("totalCost"), `<div class="input-unit"><input name="cost" type="number" min="0" step="any" value="${period?.cost ?? ""}"><span>${this._escape(entry.units.currency)}</span></div>`)}
-        <label id="tariff-field"><span>${this._t("tariff")}</span><select name="tariff_mode" id="tariff-mode"><option value="single" ${tariff === "single" ? "selected" : ""}>${this._t("single")}</option><option value="peak_offpeak" ${tariff === "peak_offpeak" ? "selected" : ""}>${this._t("peakOffpeak")}</option></select></label>
+        <label id="tariff-field">${this._fieldLabel(this._t("tariff"), "singleTariffHelp")}<select name="tariff_mode" id="tariff-mode"><option value="single" ${tariff === "single" ? "selected" : ""}>${this._t("single")}</option><option value="peak_offpeak" ${tariff === "peak_offpeak" ? "selected" : ""}>${this._t("peakOffpeak")}</option></select></label>
         <div id="dual-tariff" class="tariff-grid wide ${tariff === "peak_offpeak" && type === "electricity" ? "" : "hidden"}">
           ${this._field(this._t("peakConsumption"), `<input name="peak_value" type="number" min="0" step="any" value="${period?.peak_value ?? ""}">`)}
           ${this._field(this._t("offpeakConsumption"), `<input name="offpeak_value" type="number" min="0" step="any" value="${period?.offpeak_value ?? ""}">`)}
@@ -762,26 +1047,53 @@ class RentalConsumptionPanel extends HTMLElement {
     </section>`;
   }
 
-  _field(label, control) {
-    return `<label><span>${label}</span>${control}</label>`;
+  _field(label, control, options = {}) {
+    return `<label>${this._fieldLabel(label, options.helpKey || null, options)}${control}</label>`;
   }
-
   _periodRow(entry, period) {
     const analysis = period.electricity_analysis || period.heating_analysis || {};
     const coverage = analysis.coverage ?? analysis.temperature_coverage;
     return `<article class="period-row">
-      <div class="period-main"><div class="type-icon">${period.consumption_type === "electricity" ? "⚡" : period.consumption_type === "pv_electricity" ? "☀️" : period.consumption_type === "heating" ? "♨" : "💧"}</div><div><strong>${this._typeLabel(period.consumption_type)}</strong><span>${this._date(period.start_date)} – ${this._date(period.end_date)} · ${period.days} j</span><small class="provider-line">${this._escape(period.provider || this._t("noProvider"))}</small></div></div>
-      <div class="metric"><span>${this._t("consumption")}</span><strong>${this._num(period.value, 3)} ${this._escape(entry.units[period.consumption_type])}</strong><small>${this._num(period.daily_average, 3)}/j</small></div>
+      <div class="period-main"><div class="type-icon">${period.consumption_type === "electricity" ? "⚡" : period.consumption_type === "pv_electricity" ? "☀️" : period.consumption_type === "heating" ? "♨" : "💧"}</div><div><strong>${this._typeLabel(period.consumption_type)}</strong><span>${this._date(period.start_date)} – ${this._date(period.end_date)} · ${period.days} ${this._t("daysShort")}</span><small class="provider-line">${this._escape(period.provider || this._t("noProvider"))}</small></div></div>
+      <div class="metric"><span>${this._t("consumption")}</span><strong>${this._num(period.value, 3)} ${this._escape(entry.units[period.consumption_type])}</strong><small>${this._num(period.daily_average, 3)}${this._t("perDay")}</small></div>
       <div class="metric"><span>${this._t("totalCost")}</span><strong>${period.cost == null ? "—" : `${this._num(period.cost, 2)} ${this._escape(entry.units.currency)}`}</strong><small>${period.unit_price == null ? "—" : `${this._num(period.unit_price, 4)} ${this._escape(entry.units.unit_prices[period.consumption_type])}`}</small></div>
-      <div class="badges">${period.consumption_type === "electricity" ? `<span class="badge">${this._tariffLabel(period.tariff_mode)}</span>` : ""}<span class="badge">${this._distributionLabel(analysis.distribution || "uniform_daily")}</span>${analysis.source ? `<span class="badge accent">${this._escape(analysis.source)}</span>` : ""}${coverage != null ? `<span class="badge">${this._num(coverage * 100, 0)}%</span>` : ""}</div>
+      <div class="badges">${period.consumption_type === "electricity" ? `<span class="badge" title="${this._escape(period.tariff_mode === "single" ? this._t("singleTariffHelp") : this._t("tariffHelp"))}">${this._tariffLabel(period.tariff_mode)}</span>` : ""}<span class="badge" title="${this._escape(this._t("loadCurveHelp"))}">${this._distributionLabel(analysis.distribution || "uniform_daily")}</span>${analysis.source ? `<span class="badge accent" title="${this._escape(this._t("loadSourceHelp"))}">${this._escape(analysis.source)}</span>` : ""}${coverage != null ? `<span class="badge" title="${this._escape(this._t("coverageHelp"))}">${this._num(coverageToPercent(coverage), 0)}%</span>` : ""}</div>
       <div class="period-actions"><button class="button compact" data-action="edit" data-id="${period.period_id}">${this._t("edit")}</button><button class="button danger compact" data-action="delete" data-id="${period.period_id}">${this._t("delete")}</button></div>
-      ${period.tariff_mode === "peak_offpeak" ? `<div class="tariff-detail"><span>On-peak: <b>${this._num(period.peak_value, 3)} kWh</b>${period.peak_cost != null ? ` · ${this._num(period.peak_cost, 2)} ${entry.units.currency}` : ""}</span><span>Off-peak: <b>${this._num(period.offpeak_value, 3)} kWh</b>${period.offpeak_cost != null ? ` · ${this._num(period.offpeak_cost, 2)} ${entry.units.currency}` : ""}</span></div>` : ""}
+      ${period.tariff_mode === "peak_offpeak" ? `<div class="tariff-detail"><span>${this._t("peakLabel")}: <b>${this._num(period.peak_value, 3)} kWh</b>${period.peak_cost != null ? ` · ${this._num(period.peak_cost, 2)} ${entry.units.currency}` : ""}</span><span>${this._t("offpeakLabel")}: <b>${this._num(period.offpeak_value, 3)} kWh</b>${period.offpeak_cost != null ? ` · ${this._num(period.offpeak_cost, 2)} ${entry.units.currency}` : ""}</span></div>` : ""}
       ${period.note ? `<div class="period-note">${this._escape(period.note)}</div>` : ""}
     </article>`;
   }
 
+  _markDirty(kind) {
+    if (kind === "settings") this._settingsDirty = true;
+    if (kind === "export") this._exportDirty = true;
+    this.shadowRoot.querySelector(`[data-unsaved="${kind}"]`)?.classList.remove("hidden");
+  }
+
+  _setupEntityPickers() {
+    customElements.whenDefined("ha-entity-picker").then(() => {
+      this.shadowRoot.querySelectorAll("ha-entity-picker[data-hidden-name]").forEach((picker) => {
+        if (!picker.isConnected || picker.dataset.bound === "1") return;
+        picker.dataset.bound = "1";
+        picker.includeDomains = ["sensor"];
+        picker.includeDeviceClasses = [picker.dataset.deviceClass];
+        picker.value = picker.dataset.value || "";
+        picker.allowCustomEntity = true;
+        picker.showEntityId = true;
+        const hidden = this.shadowRoot.querySelector(`input[type="hidden"][name="${picker.dataset.hiddenName}"]`);
+        picker.addEventListener("value-changed", (event) => {
+          if (hidden) hidden.value = event.detail?.value || "";
+          this._markDirty("settings");
+        });
+      });
+    });
+  }
+
   _bind() {
     this.shadowRoot.querySelector('[data-action="refresh"]')?.addEventListener("click", async () => {
+      if (!this._confirmDiscardChanges()) return;
+      this._settingsDirty = false;
+      this._exportDirty = false;
       this._invalidateAnalysis();
       await this._loadData();
       if (this._activeTab === "analysis") await this._loadAnalysis(true);
@@ -798,6 +1110,9 @@ class RentalConsumptionPanel extends HTMLElement {
     });
     this.shadowRoot.querySelector("#apartment-form")?.addEventListener("submit", (event) => this._handleApartment(event));
     this.shadowRoot.querySelector("#entry-select")?.addEventListener("change", (event) => {
+      if (!this._confirmDiscardChanges()) { this._render(); return; }
+      this._settingsDirty = false;
+      this._exportDirty = false;
       this._selectedEntryId = event.target.value;
       this._editingPeriodId = null;
       this._historyProvider = "all";
@@ -806,17 +1121,38 @@ class RentalConsumptionPanel extends HTMLElement {
       if (this._activeTab === "analysis") this._loadAnalysis();
     });
     this.shadowRoot.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => {
+      if (this._activeTab === "settings" && button.dataset.tab !== "settings" && !this._confirmDiscardChanges()) return;
+      if (button.dataset.tab !== "settings") { this._settingsDirty = false; this._exportDirty = false; }
       this._activeTab = button.dataset.tab;
       this._message = null;
       this._render();
       if (this._activeTab === "analysis") this._loadAnalysis();
     }));
+    this.shadowRoot.querySelector('[data-action="open-settings"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._render(); });
+    this.shadowRoot.querySelector('[data-action="open-settings-advanced"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._advancedSettingsOpen = true; this._render(); });
+    this.shadowRoot.querySelector('[data-action="toggle-advanced"]')?.addEventListener("click", (event) => {
+      this._advancedSettingsOpen = !this._advancedSettingsOpen;
+      this.shadowRoot.querySelector("#advanced-settings-content")?.classList.toggle("hidden", !this._advancedSettingsOpen);
+      this.shadowRoot.querySelector("#advanced-export-wrapper")?.classList.toggle("hidden", !this._advancedSettingsOpen);
+      event.currentTarget.textContent = `${this._advancedSettingsOpen ? "▾" : "▸"} ${this._t("advancedSettings")}`;
+      if (this._advancedSettingsOpen) this._setupEntityPickers();
+    });
     this.shadowRoot.querySelector("#history-type")?.addEventListener("change", (event) => { this._historyType = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#history-year")?.addEventListener("change", (event) => { this._historyYear = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#history-provider")?.addEventListener("change", (event) => { this._historyProvider = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#period-form")?.addEventListener("submit", (event) => this._handlePeriod(event));
-    this.shadowRoot.querySelector("#settings-form")?.addEventListener("submit", (event) => this._handleSettings(event));
-    this.shadowRoot.querySelector("#export-form")?.addEventListener("submit", (event) => this._saveExport(event));
+    const settingsForm = this.shadowRoot.querySelector("#settings-form");
+    settingsForm?.addEventListener("submit", (event) => this._handleSettings(event));
+    settingsForm?.querySelectorAll("input:not([type=hidden]),select,textarea").forEach((field) => {
+      field.addEventListener("input", () => this._markDirty("settings"));
+      field.addEventListener("change", () => this._markDirty("settings"));
+    });
+    const exportForm = this.shadowRoot.querySelector("#export-form");
+    exportForm?.addEventListener("submit", (event) => this._saveExport(event));
+    exportForm?.querySelectorAll("input,select,textarea").forEach((field) => {
+      field.addEventListener("input", () => this._markDirty("export"));
+      field.addEventListener("change", () => this._markDirty("export"));
+    });
     this.shadowRoot.querySelector("#export-backend")?.addEventListener("change", () => this._updateExportFields());
     this.shadowRoot.querySelector("#consumption-type")?.addEventListener("change", (event) => this._periodTypeChanged(event.target.value));
     this.shadowRoot.querySelector("#tariff-mode")?.addEventListener("change", () => this._periodTypeChanged(this.shadowRoot.querySelector("#consumption-type")?.value));
@@ -836,10 +1172,15 @@ class RentalConsumptionPanel extends HTMLElement {
     this.shadowRoot.querySelector("#analysis-type")?.addEventListener("change", (event) => { this._analysisType = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#analysis-granularity")?.addEventListener("change", (event) => { this._analysisGranularity = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#analysis-metric")?.addEventListener("change", (event) => { this._analysisMetric = event.target.value; this._render(); });
+    this.shadowRoot.querySelectorAll("[data-picker-fallback]").forEach((field) => field.addEventListener("input", () => {
+      const hidden = this.shadowRoot.querySelector(`input[type="hidden"][name="${field.dataset.pickerFallback}"]`);
+      if (hidden) hidden.value = field.value;
+      this._markDirty("settings");
+    }));
     this._periodTypeChanged(this.shadowRoot.querySelector("#consumption-type")?.value);
     this._updateExportFields();
+    this._setupEntityPickers();
   }
-
   _periodTypeChanged(type) {
     if (!type) return;
     const entry = this._entry;
@@ -949,39 +1290,43 @@ class RentalConsumptionPanel extends HTMLElement {
   async _handleSettings(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const current = this._entry.settings || {};
+    const percentValue = form.get("load_curve_min_coverage_percent");
     const payload = {
       type: "rental_consumption/update_settings",
       entry_id: this._entry.entry_id,
       grid_operator: form.get("grid_operator") || "",
       currency: form.get("currency") || "CHF",
-      heating_distribution: form.get("heating_distribution"),
+      heating_distribution: form.get("heating_distribution") || current.heating_distribution,
       outdoor_temperature_sensor: form.get("outdoor_temperature_sensor") || "",
-      heating_base_temperature: Number(form.get("heating_base_temperature")),
-      electricity_distribution: form.get("electricity_distribution"),
+      heating_base_temperature: form.get("heating_base_temperature") !== null ? Number(form.get("heating_base_temperature")) : Number(current.heating_base_temperature ?? 20),
+      electricity_distribution: form.get("electricity_distribution") || current.electricity_distribution,
       electricity_load_sensor: form.get("electricity_load_sensor") || "",
-      load_curve_source: form.get("load_curve_source"),
-      load_curve_min_coverage: Number(form.get("load_curve_min_coverage")),
-      vm_load_metric: form.get("vm_load_metric") || "W_value",
-      vm_load_db_label: form.get("vm_load_db_label") || "homeassistant"
+      load_curve_source: form.get("load_curve_source") || current.load_curve_source || "auto",
+      load_curve_min_coverage: percentValue !== null ? percentToCoverage(percentValue) : Number(current.load_curve_min_coverage ?? 0.9),
+      vm_load_metric: form.get("vm_load_metric") || current.vm_load_metric || "W_value",
+      vm_load_db_label: form.get("vm_load_db_label") || current.vm_load_db_label || "homeassistant"
     };
     await this._run("save-settings", async () => {
       const updated = await this._hass.callWS(payload);
       this._replaceEntry(updated);
+      this._settingsDirty = false;
       this._message = { kind: "success", text: this._t("saved") };
     });
   }
-
   _exportPayload() {
     const formElement = this.shadowRoot.querySelector("#export-form");
     if (!formElement) return null;
     const form = new FormData(formElement);
+    const backend = form.get("export_backend");
+    const database = backend === "victoriametrics" ? (form.get("export_database_vm") || "") : (form.get("export_database") || "");
     const payload = {
       type: "rental_consumption/update_export_settings",
       entry_id: this._entry.entry_id,
-      export_backend: form.get("export_backend"),
+      export_backend: backend,
       export_url: form.get("export_url") || "",
       export_auto_sync: form.get("export_auto_sync") === "on",
-      export_database: form.get("export_database") || "",
+      export_database: database,
       export_retention_policy: form.get("export_retention_policy") || "",
       export_org: form.get("export_org") || "",
       export_bucket: form.get("export_bucket") || "",
@@ -993,7 +1338,6 @@ class RentalConsumptionPanel extends HTMLElement {
     });
     return payload;
   }
-
   async _saveExport(event, options = {}) {
     if (event) event.preventDefault();
     const payload = this._exportPayload();
@@ -1003,38 +1347,40 @@ class RentalConsumptionPanel extends HTMLElement {
     await this._run(action, async () => {
       result = await this._hass.callWS(payload);
       this._replaceEntry(result);
+      this._exportDirty = false;
       if (!options.silent) this._message = { kind: "success", text: this._t("exportSaved") };
     }, { keepMessage: options.silent });
     return result;
   }
-
   async _testExport() {
     if (this._busyAction) return;
     const savePayload = this._exportPayload();
     this._busyAction = "test-export";
+    this._advancedSettingsOpen = true;
     this._render();
     try {
       if (savePayload) {
         const updated = await this._hass.callWS(savePayload);
         this._replaceEntry(updated);
+        this._exportDirty = false;
       }
       await this._hass.callWS({ type: "rental_consumption/test_export", entry_id: this._entry.entry_id });
       this._message = { kind: "success", text: this._t("connectionOk") };
     } catch (error) {
-      this._message = { kind: "error", text: this._friendlyError(error) };
+      this._message = this._errorMessage(error);
     } finally {
       this._busyAction = null;
       try {
         const fresh = await this._hass.callWS({ type: "rental_consumption/get_data" });
         this._data = fresh;
       } catch (_error) {
-        // Keep the visible local feedback even if refreshing the persisted status fails.
+        // Keep local feedback if refreshing persisted status fails.
       }
       this._activeTab = "settings";
+      this._advancedSettingsOpen = true;
       this._render();
     }
   }
-
   async _syncExport() {
     if (!confirm(this._t("confirmSync"))) return;
     const savePayload = this._exportPayload();
@@ -1076,64 +1422,15 @@ class RentalConsumptionPanel extends HTMLElement {
     try {
       await fn();
     } catch (error) {
-      this._message = { kind: "error", text: this._friendlyError(error) };
+      this._message = this._errorMessage(error);
     } finally {
       this._busyAction = null;
       this._render();
     }
   }
-
   _friendlyError(error) {
-    const raw = String(error?.message || error || "");
-    const fr = {
-      tariff_total_mismatch: "La somme on-peak + off-peak doit être égale à la consommation totale.",
-      tariff_cost_mismatch: "La somme des coûts on-peak + off-peak doit être égale au coût total.",
-      invalid_tariff_values: "Les consommations on-peak / off-peak sont invalides.",
-      export_not_configured: "La base externe n’est pas configurée.",
-      safe_rebuild_not_supported: "Cette destination ne permet pas une reconstruction sûre avec suppression.",
-      delete_not_supported: "La suppression sûre n’est pas disponible pour cette destination.",
-      recorder_unavailable: "Recorder n’est pas disponible.",
-      recorder_error: "La reconstruction Recorder a échoué. Le détail technique est conservé ci-dessous.",
-      apartment_exists: "Un logement portant ce nom existe déjà.",
-      invalid_name: "Le nom du logement n’est pas valide.",
-      apartment_create_failed: "La création du logement a échoué.",
-      apartment_setup_failed: "Le logement a été créé mais son chargement dans Home Assistant a échoué.",
-      overlap: "Cette période chevauche une période existante du même type.",
-      future_end: "La date de fin ne peut pas être dans le futur.",
-      database_required: "Le champ Database est obligatoire pour cette destination.",
-      org_bucket_required: "Organisation et Bucket sont obligatoires pour InfluxDB 2.",
-      read_failed: "VictoriaMetrics est joignable et accepte l’écriture, mais le point de test n’a pas pu être relu.",
-      write_failed: "La connexion au serveur fonctionne, mais l’écriture du point de test a échoué.",
-      delete_failed: "Le test d’écriture fonctionne, mais la suppression du point de test a échoué. Vérifie deleteAuthKey si tu l’utilises.",
-      health_failed: "VictoriaMetrics n’est pas joignable avec les paramètres actuels."
-    };
-    const en = {
-      tariff_total_mismatch: "Peak + off-peak consumption must equal total consumption.",
-      tariff_cost_mismatch: "Peak + off-peak costs must equal total cost.",
-      invalid_tariff_values: "Peak / off-peak values are invalid.",
-      export_not_configured: "The external database is not configured.",
-      safe_rebuild_not_supported: "This destination does not support a safe delete-and-rebuild.",
-      delete_not_supported: "Safe deletion is not available for this destination.",
-      recorder_unavailable: "Recorder is unavailable.",
-      recorder_error: "Recorder reconstruction failed. The technical detail is preserved below.",
-      apartment_exists: "A dwelling with this name already exists.",
-      invalid_name: "The dwelling name is invalid.",
-      apartment_create_failed: "Creating the dwelling failed.",
-      apartment_setup_failed: "The dwelling was created but could not be loaded in Home Assistant.",
-      overlap: "This period overlaps an existing period of the same type.",
-      future_end: "The end date cannot be in the future.",
-      database_required: "Database is required for this destination.",
-      org_bucket_required: "Organization and Bucket are required for InfluxDB 2.",
-      read_failed: "VictoriaMetrics accepted the write, but the test point could not be read back.",
-      write_failed: "The server is reachable, but writing the test point failed.",
-      delete_failed: "The write test worked, but deleting the test point failed. Check deleteAuthKey if you use it.",
-      health_failed: "VictoriaMetrics is not reachable with the current settings."
-    };
-    const map = this._lang === "fr" ? fr : en;
-    for (const [code, message] of Object.entries(map)) if (raw.includes(code)) return `${message}${raw.includes(":") ? ` (${raw})` : ""}`;
-    return raw;
+    return this._errorPresentation(error).text;
   }
-
   _styles() {
     return `
       :host{display:block;min-height:100%;background:var(--primary-background-color);color:var(--primary-text-color);font-family:var(--ha-font-family-body,Roboto,sans-serif)}
@@ -1153,10 +1450,12 @@ class RentalConsumptionPanel extends HTMLElement {
       .analysis-controls .section-header p{margin:5px 0 0}.analysis-toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.analysis-toolbar label{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:12px}.analysis-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.analysis-kpi-grid .compact-card{padding:15px}.analysis-kpi-grid span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:6px}.analysis-kpi-grid strong{font-size:17px;display:block}.analysis-kpi-grid small{display:block;margin-top:6px}.change.up{color:var(--warning-color,#f4b400)}.change.down{color:var(--primary-color)}.change.neutral{color:var(--secondary-text-color)}.chart-card h2{margin-bottom:14px}.svg-chart{position:relative;width:100%;overflow-x:auto}.svg-chart svg{width:100%;min-width:620px;height:auto;display:block}.grid-line{stroke:var(--divider-color);stroke-width:1}.axis-text{fill:var(--secondary-text-color);font-size:11px}.x-label{font-size:10px}.chart-line{fill:none;stroke:var(--primary-color);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}.chart-point{fill:var(--primary-color);stroke:var(--card-background-color);stroke-width:1.5}.chart-unit{position:absolute;top:0;left:0;color:var(--secondary-text-color);font-size:11px}.bar-grid{fill:var(--primary-color)}.bar-pv{fill:var(--warning-color,#f4b400)}.chart-legend{display:flex;gap:16px;justify-content:flex-end;color:var(--secondary-text-color);font-size:12px;margin-bottom:2px}.chart-legend span{display:flex;gap:6px;align-items:center}.chart-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}.legend-grid{background:var(--primary-color)}.legend-pv{background:var(--warning-color,#f4b400)}
       .history-toolbar{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}.history-toolbar select{width:auto;min-width:180px}.period-list{display:grid;gap:10px}.period-row{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.8fr) minmax(170px,.9fr) minmax(220px,1fr) auto;gap:16px;align-items:center;padding:15px}.period-main{display:flex;align-items:center;gap:11px}.period-main strong,.period-main span,.period-main small{display:block}.period-main span,.provider-line{color:var(--secondary-text-color);font-size:12px;margin-top:4px}.provider-line{font-weight:600}.type-icon{font-size:22px;width:34px;height:34px;display:grid;place-items:center;background:var(--secondary-background-color);border-radius:9px}.metric strong{display:block;font-size:15px}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.badge.accent{color:var(--primary-color);border:1px solid color-mix(in srgb,var(--primary-color) 35%,transparent)}.period-actions{display:flex;gap:6px}.tariff-detail,.period-note{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.tariff-detail{display:flex;gap:20px}.tariff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.empty{text-align:center;padding:28px;color:var(--secondary-text-color)}
       .settings-card h2{margin-bottom:16px}.sticky-actions{position:sticky;bottom:8px;z-index:3;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--card-background-color) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--divider-color);margin-bottom:16px}.export-status{margin-top:18px;padding:14px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.compact-status{margin-top:8px}.status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--disabled-text-color,#888)}.status-dot.ok{background:var(--success-color,#43a047)}.status-dot.error{background:var(--error-color,#db4437)}.status-dot.testing{background:var(--warning-color,#ff9800)}.status-message{margin-top:8px;color:var(--secondary-text-color);font-size:12px;word-break:break-word}.status-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.step{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--card-background-color);border:1px solid var(--divider-color)}.step.ok{color:var(--success-color,#43a047)}.step.error{color:var(--error-color,#db4437)}
+
+      .field-label{display:flex!important;align-items:center;gap:6px!important;min-height:20px}.required-marker{color:var(--error-color,#db4437);margin-left:3px}.optional-marker{margin-left:6px;color:var(--secondary-text-color);font-size:11px;font-weight:400}.help-icon{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:11px;font-weight:700;cursor:help;flex:0 0 auto}.help-icon::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:320px;padding:8px 10px;border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,0 4px 12px rgba(0,0,0,.25));font-size:12px;font-weight:400;line-height:1.35;opacity:0;visibility:hidden;pointer-events:none;z-index:50;white-space:normal}.help-icon:hover::after,.help-icon:focus::after{opacity:1;visibility:visible}.entity-picker-wrap{display:grid;gap:5px}.entity-picker-wrap ha-entity-picker{width:100%}.entity-picker-fallback{display:none}.entity-picker-wrap ha-entity-picker:not(:defined){display:none}.entity-picker-wrap ha-entity-picker:not(:defined)+.entity-picker-fallback{display:block}.advanced-toggle-card{padding:14px 20px}.advanced-toggle{padding-left:0}.advanced-content{padding-top:14px;border-top:1px solid var(--divider-color);margin-top:10px}.backend-options{margin-top:14px;padding:12px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.backend-options summary{cursor:pointer;font-weight:600;color:var(--primary-text-color);margin-bottom:12px}.options-grid{margin-top:12px}.unsaved-warning{margin:10px 0;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning-color,#ff9800) 12%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));color:var(--primary-text-color);font-size:13px}.message-action,.status-action{margin-top:8px;font-size:13px}.technical-details{margin-top:10px}.technical-details summary{cursor:pointer;color:var(--secondary-text-color);font-size:12px}.technical-details pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:11px;max-height:180px;overflow:auto}.context-alert{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;border-radius:10px;border:1px solid var(--divider-color);background:var(--card-background-color);font-size:13px}.context-alert>div>div{margin-top:4px;color:var(--secondary-text-color)}.warning-alert{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));background:color-mix(in srgb,var(--warning-color,#ff9800) 9%,var(--card-background-color))}.error-alert{border-color:color-mix(in srgb,var(--error-color,#db4437) 55%,var(--divider-color));background:color-mix(in srgb,var(--error-color,#db4437) 8%,var(--card-background-color))}.action-description{margin-top:8px;color:var(--secondary-text-color);font-size:12px;text-align:right}.status-dot.warning{background:var(--warning-color,#ff9800)}.status-dot.neutral{background:var(--disabled-text-color,#888)}.export-status.level-warning{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 50%,var(--divider-color))}.export-status.level-error{border-color:color-mix(in srgb,var(--error-color,#db4437) 50%,var(--divider-color))}.export-status.level-ok{border-color:color-mix(in srgb,var(--success-color,#43a047) 45%,var(--divider-color))}.status-steps .step{font-size:12px}.status-message{font-size:13px!important;color:var(--primary-text-color)!important}
       .modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:0 18px 55px rgba(0,0,0,.32)}.modal-card .section-header{margin-bottom:16px}
       .hidden{display:none!important}
       @media(max-width:1100px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
-      @media(max-width:700px){main{padding:14px 10px 40px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
+      @media(max-width:700px){main{padding:14px 10px 40px}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
     `;
   }
 }

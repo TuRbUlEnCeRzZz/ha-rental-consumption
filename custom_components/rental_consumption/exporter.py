@@ -184,22 +184,27 @@ class TimeSeriesExporter:
             ) as response:
                 if response.status >= 400:
                     message = (await response.text())[:300]
+                    steps["health"] = "error"
                     raise ExportError(
                         f"health_failed:{response.status}:{message}", steps=steps
                     )
             steps["health"] = "ok"
 
-            await self._async_write_lines(
-                [
-                    _line(
-                        "rental_consumption_connection_test",
-                        tags,
-                        "value",
-                        1.0,
-                        timestamp,
-                    )
-                ]
-            )
+            try:
+                await self._async_write_lines(
+                    [
+                        _line(
+                            "rental_consumption_connection_test",
+                            tags,
+                            "value",
+                            1.0,
+                            timestamp,
+                        )
+                    ]
+                )
+            except ExportError as err:
+                steps["write"] = "error"
+                raise ExportError(str(err), steps=steps) from err
             wrote_test_point = True
             steps["write"] = "ok"
 
@@ -225,6 +230,7 @@ class TimeSeriesExporter:
                 ) as response:
                     last_body = await response.text()
                     if response.status >= 400:
+                        steps["read"] = "error"
                         raise ExportError(
                             f"read_failed:{response.status}:{last_body[:300]}",
                             steps=steps,
@@ -232,6 +238,7 @@ class TimeSeriesExporter:
                     try:
                         payload = json.loads(last_body)
                     except json.JSONDecodeError as err:
+                        steps["read"] = "error"
                         raise ExportError(
                             f"read_failed:invalid_json:{last_body[:300]}",
                             steps=steps,
@@ -243,11 +250,16 @@ class TimeSeriesExporter:
                     ):
                         break
                 if asyncio.get_running_loop().time() >= read_deadline:
+                    steps["read"] = "error"
                     raise ExportError("read_failed:test_point_not_found", steps=steps)
                 await asyncio.sleep(0.5)
             steps["read"] = "ok"
 
-            await self._async_delete_vm_selectors([selector])
+            try:
+                await self._async_delete_vm_selectors([selector])
+            except ExportError as err:
+                steps["delete"] = "error"
+                raise ExportError(str(err), steps=steps) from err
             wrote_test_point = False
             steps["delete"] = "ok"
             return {"ok": True, "steps": steps, **self.capabilities}

@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 adds deterministic charts and analyses while using the exact same reconstructed allocation as Recorder.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focuses on UX reliability, contextual help and a simpler Settings experience.
 
 ## Highlights
 
@@ -51,6 +51,34 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 6. Search for **Rental Consumption**.
 
 
+
+## What changed in v1.6.1
+
+### Clear errors and coherent states
+
+Technical backend errors are no longer shown directly as the main user-facing message. Known failures are mapped to concise French/English explanations with a suggested action, while the original technical detail remains available in a collapsed **Show technical details** block.
+
+External database tests now distinguish a global state from individual capabilities. Partial failures are shown as warning-level states, while each attempted step explicitly reports `OK` or `failed`. VictoriaMetrics test failures also persist the failed step in the backend status payload.
+
+The Overview tab warns when the configured electricity load-curve allocation cannot be fully applied and explains that billed totals remain exact while temporal distribution may be less precise.
+
+### Simpler Settings tab
+
+The default Settings view now keeps the user-oriented fields visible: supplier, currency, allocation method and Home Assistant sensors. Technical controls are grouped under **Advanced settings**.
+
+Home Assistant entity pickers are used for the incoming-power and outdoor-temperature sensors, filtered by the corresponding device class. A plain entity-id input remains as a fallback if the native picker is unavailable.
+
+VictoriaMetrics local setup shows the URL first. Database, credentials, token and delete key are grouped under an optional authentication/options block. InfluxDB fields remain conditional on the selected backend.
+
+Minimum load-curve coverage is now entered as a percentage (`90 %`) while the existing backend representation remains `0.90`.
+
+Unsaved settings are visibly flagged, and leaving the Settings tab or switching dwelling asks before discarding changes.
+
+### Contextual help and wording
+
+Technical terms now include short contextual tooltips, including Recorder, load curve, configured/effective allocation, coverage, weighted/uniform periods, tariff mode, base temperature, VictoriaMetrics metric/db label, token, delete key and curve source. French terminology was normalized (`Base de données`, `Jeton`, `Étiquette « db »`, `Fournisseur d’électricité (GRD)`, etc.).
+
+No backend data model migration is required for v1.6.1.
 
 ## What changed in v1.6.0
 
@@ -511,6 +539,13 @@ After updating:
 6. rebuild external history manually;
 7. inspect the result in Grafana / your database;
 8. enable auto-sync only after validation.
+
+
+## Roadmap
+
+- **v1.6.2**: empty states, first-run checklist, period-entry UX and Recorder action feedback.
+- **v1.6.3**: Overview/Analysis UX, accessibility/mobile polish, additional charts, and previous/next period arrows in the Analysis tab.
+- **v1.7.0**: deeper analytical quality and N/N-1 comparisons.
 
 ## Data and backups
 

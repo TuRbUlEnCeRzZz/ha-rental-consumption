@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.1 — 2026-10-01
+
+- Reworked user-facing error handling so raw backend errors are hidden behind a collapsed technical-details block.
+- Added actionable French/English messages for VictoriaMetrics, Recorder, authentication and common validation failures.
+- Added coherent global external-database states: OK, partially functional, error and never tested.
+- Added explicit per-step statuses such as `Server reachable: OK`, `Write: OK`, `Read: failed`.
+- Persisted explicit failed VictoriaMetrics test steps in the backend status payload.
+- Added an Overview warning when load-curve allocation falls back because measured data is incomplete or unavailable.
+- Added contextual tooltips for technical terminology throughout Settings and allocation diagnostics.
+- Normalized French wording, including Base de données, Jeton, Étiquette « db », and Fournisseur d’électricité (GRD).
+- Reworked Settings into simple and advanced modes.
+- Moved VictoriaMetrics metric/db-label and external database settings into Advanced settings.
+- Added Home Assistant `ha-entity-picker` controls for power and outdoor-temperature sensors, with device-class filtering and a text fallback.
+- Reworked VictoriaMetrics local setup so only URL is shown initially; optional authentication/options are collapsed.
+- Changed minimum coverage input from ratio notation (`0.90`) to a user-facing percentage (`90 %`) while preserving the backend format.
+- Added unsaved-change warnings and discard confirmation when leaving Settings or switching dwellings.
+- Added pure frontend logic tests for percentage conversion, error classification and external-status severity.
+- Updated README, translations and validation workflow.
+
 ## 1.6.0 — 2026-10-01
 
 - Added deterministic chart-ready analytics through a dedicated `rental_consumption/get_analysis_data` WebSocket command.

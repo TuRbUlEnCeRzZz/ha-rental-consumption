@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.6.0."""
+"""Repository-level consistency tests for v1.6.1."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.6.0"
+    assert manifest["version"] == VERSION == "1.6.1"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -196,3 +196,33 @@ def test_v160_vm_test_does_not_send_invalid_zero_latency_offset() -> None:
     exporter = (INTEGRATION / "exporter.py").read_text(encoding="utf-8")
     assert '"latency_offset": "0"' not in exporter
     assert "timestamp = int(datetime.now(tz=timezone.utc).timestamp()) - 120" in exporter
+
+
+def test_v161_ux_reliability_and_settings_are_shipped() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    utils = (INTEGRATION / "frontend" / "ui-utils.mjs").read_text(encoding="utf-8")
+    exporter = (INTEGRATION / "exporter.py").read_text(encoding="utf-8")
+    assert "technical-details" in panel
+    assert "suggestedAction" in panel
+    assert "statusPartial" in panel
+    assert "ha-entity-picker" in panel
+    assert "includeDeviceClasses" in panel
+    assert "advancedSettings" in panel
+    assert "load_curve_min_coverage_percent" in panel
+    assert "percentToCoverage" in panel
+    assert "coverageToPercent" in panel
+    assert "unsavedChanges" in panel
+    assert "fallbackNotice" in panel
+    fr_block = panel.split('fr: {', 1)[1].split('en: {', 1)[0]
+    assert 'database: "Base de données"' in fr_block
+    assert 'database: "Database"' not in fr_block
+    assert "classifyError" in utils
+    assert 'steps["read"] = "error"' in exporter
+    assert 'steps["write"] = "error"' in exporter
+    assert 'steps["delete"] = "error"' in exporter
+
+
+def test_v161_external_errors_are_not_appended_to_friendly_headlines() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert '`${message}${raw.includes(":")' not in panel
+    assert "_technicalDetail(errorInfo.detail)" in panel

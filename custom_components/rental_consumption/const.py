@@ -4,7 +4,7 @@ from typing import Final, Literal
 
 DOMAIN: Final = "rental_consumption"
 NAME: Final = "Consommation locative"
-VERSION: Final = "1.6.0"
+VERSION: Final = "1.6.1"
 
 PLATFORMS: Final = ["sensor"]
 

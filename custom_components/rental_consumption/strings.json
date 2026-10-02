@@ -8,7 +8,7 @@
         "data": {
           "apartment_name": "Apartment name",
           "heating_unit": "Heating unit",
-          "grid_operator": "Grid operator / electricity supplier",
+          "grid_operator": "Electricity supplier (DSO)",
           "currency": "Currency"
         }
       }
@@ -106,7 +106,7 @@
       "settings": {
         "title": "Billing settings",
         "data": {
-          "grid_operator": "Grid operator / supplier",
+          "grid_operator": "Electricity supplier (DSO)",
           "currency": "Currency",
           "heating_distribution": "Heating distribution",
           "outdoor_temperature_sensor": "Outdoor sensor entity",

@@ -8,7 +8,7 @@
         "data": {
           "apartment_name": "Nom du logement",
           "heating_unit": "Unité du chauffage",
-          "grid_operator": "GRD / fournisseur d'électricité",
+          "grid_operator": "Fournisseur d’électricité (GRD)",
           "currency": "Devise"
         }
       }
@@ -106,7 +106,7 @@
       "settings": {
         "title": "Réglages des décomptes",
         "data": {
-          "grid_operator": "GRD / fournisseur",
+          "grid_operator": "Fournisseur d’électricité (GRD)",
           "currency": "Devise",
           "heating_distribution": "Répartition du chauffage",
           "outdoor_temperature_sensor": "Entité du capteur extérieur",
