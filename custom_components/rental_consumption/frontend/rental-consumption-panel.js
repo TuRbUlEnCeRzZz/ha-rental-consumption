@@ -6,6 +6,11 @@ import {
   exportStatusLevel,
   percentToCoverage,
   periodDurationDays,
+  deriveScopeRange,
+  filterDailyRows,
+  summarizeDailyRows,
+  aggregateDailyRows,
+  adjacentPeriodIds,
 } from "./ui-utils.mjs";
 
 class RentalConsumptionPanel extends HTMLElement {
@@ -34,6 +39,11 @@ class RentalConsumptionPanel extends HTMLElement {
     this._advancedSettingsOpen = false;
     this._newPeriodType = null;
     this._priceDriver = "cost";
+    this._timeScope = "all";
+    this._timeYear = "";
+    this._timePeriodId = null;
+    this._customStart = "";
+    this._customEnd = "";
   }
 
   set hass(hass) {
@@ -205,6 +215,35 @@ class RentalConsumptionPanel extends HTMLElement {
         pvShare: "Part PV",
         totalSupply: "Fourniture totale",
         deterministicAnalysis: "Analyse déterministe basée sur les périodes enregistrées et la même répartition que Recorder.",
+        timeScope: "Période affichée",
+        scopeAll: "Toutes les données",
+        scopeYear: "Année",
+        scopeBilling: "Période de facturation",
+        scopeCustom: "Plage personnalisée",
+        coveredPeriod: "Période couverte",
+        selectedRange: "Plage sélectionnée",
+        customFrom: "Du",
+        customTo: "Au",
+        previousPeriod: "Période précédente",
+        nextPeriod: "Période suivante",
+        selectionConsumption: "Consommation sélectionnée",
+        costPerDay: "Coût/jour",
+        selectionSummaryTitle: "Synthèse de la sélection",
+        selectionSummaryEmpty: "Aucune donnée n’est disponible sur la période sélectionnée.",
+        selectionSummaryPrefix: "La sélection couvre",
+        selectionSummaryTotal: "et totalise",
+        allocationSummaryLoad: "La consommation électrique est répartie selon la courbe de charge pour",
+        allocationSummaryUniform: "La consommation électrique utilise une répartition uniforme pour",
+        allocationSummaryPeriods: "périodes sur",
+        overviewChartTitle: "Électricité réseau · Consommation par période",
+        filteredDataLoading: "Calcul de la période sélectionnée…",
+        selectYear: "Choisir une année",
+        selectBillingPeriod: "Choisir une période",
+        invalidCustomRange: "La plage personnalisée n’est pas valide.",
+        allDataHelp: "Affiche toutes les données disponibles pour ce logement.",
+        billingPeriodHelp: "La période de facturation sélectionnée devient la plage commune de la Vue d’ensemble et de l’Analyse.",
+        customRangeHelp: "Les valeurs sont recalculées jour par jour, même lorsque la plage coupe une facture en cours.",
+        useNativeChart: "Graphique Home Assistant",
         analysisLoadError: "Impossible de calculer les données d’analyse.",
         noConfiguration: "Aucune configuration.",
         noPeriodEntered: "Aucune période saisie",
@@ -317,7 +356,7 @@ class RentalConsumptionPanel extends HTMLElement {
       },
       en: {
         title: "Rental consumption",
-        subtitle: "Historical bills, Recorder allocation and time-series export.",
+        subtitle: "Historical bills, consumption allocation and export to an external historical database.",
         refresh: "Refresh",
         apartment: "Dwelling",
         addApartment: "Add dwelling",
@@ -472,6 +511,35 @@ class RentalConsumptionPanel extends HTMLElement {
         pvShare: "PV share",
         totalSupply: "Total supply",
         deterministicAnalysis: "Deterministic analysis based on stored periods and the same allocation used by Recorder.",
+        timeScope: "Displayed period",
+        scopeAll: "All data",
+        scopeYear: "Year",
+        scopeBilling: "Billing period",
+        scopeCustom: "Custom range",
+        coveredPeriod: "Covered period",
+        selectedRange: "Selected range",
+        customFrom: "From",
+        customTo: "To",
+        previousPeriod: "Previous period",
+        nextPeriod: "Next period",
+        selectionConsumption: "Selected consumption",
+        costPerDay: "Cost/day",
+        selectionSummaryTitle: "Selection summary",
+        selectionSummaryEmpty: "No data is available for the selected period.",
+        selectionSummaryPrefix: "The selection covers",
+        selectionSummaryTotal: "and totals",
+        allocationSummaryLoad: "Electricity consumption is allocated from the load curve for",
+        allocationSummaryUniform: "Electricity consumption uses uniform allocation for",
+        allocationSummaryPeriods: "periods out of",
+        overviewChartTitle: "Grid electricity · Consumption by period",
+        filteredDataLoading: "Calculating the selected period…",
+        selectYear: "Choose a year",
+        selectBillingPeriod: "Choose a period",
+        invalidCustomRange: "The custom date range is invalid.",
+        allDataHelp: "Shows all data available for this dwelling.",
+        billingPeriodHelp: "The selected billing period becomes the shared range for Overview and Analysis.",
+        customRangeHelp: "Values are recalculated day by day, even when the range cuts through a billing period.",
+        useNativeChart: "Home Assistant chart",
         analysisLoadError: "Unable to calculate analysis data.",
         noConfiguration: "No configuration.",
         noPeriodEntered: "No period entered",
@@ -597,6 +665,7 @@ class RentalConsumptionPanel extends HTMLElement {
       this._message = this._errorMessage(error);
     }
     this._render();
+    if (this._activeTab === "overview" || this._activeTab === "analysis") this._loadAnalysis();
   }
 
   async _loadAnalysis(force = false) {
@@ -750,7 +819,162 @@ class RentalConsumptionPanel extends HTMLElement {
     return percent >= 99.95 ? this._t("coverageAvailableFull") : `${this._num(percent, 1)} %`;
   }
 
+  _scopePeriods(entry, context = "overview") {
+    const periods = [...(entry?.periods || [])].sort((a, b) => `${a.start_date}|${a.end_date}|${a.period_id}`.localeCompare(`${b.start_date}|${b.end_date}|${b.period_id}`));
+    if (context === "analysis") {
+      return periods.filter((period) => period.consumption_type === this._analysisType);
+    }
+    const grid = periods.filter((period) => period.consumption_type === "electricity");
+    return grid.length ? grid : periods;
+  }
+
+  _availableYears(entry) {
+    const periods = entry?.periods || [];
+    if (!periods.length) return [];
+    const startYear = Math.min(...periods.map((period) => Number(String(period.start_date).slice(0, 4))).filter(Number.isFinite));
+    const endYear = Math.max(...periods.map((period) => Number(String(period.end_date).slice(0, 4))).filter(Number.isFinite));
+    if (!Number.isFinite(startYear) || !Number.isFinite(endYear)) return [];
+    return Array.from({ length: endYear - startYear + 1 }, (_unused, index) => String(startYear + index)).reverse();
+  }
+
+  _ensureTimeSelection(entry, context = "overview") {
+    const years = this._availableYears(entry);
+    if (!this._timeYear || !years.includes(this._timeYear)) this._timeYear = years[0] || "";
+    const scopePeriods = this._scopePeriods(entry, context);
+    if (!this._timePeriodId || !scopePeriods.some((period) => period.period_id === this._timePeriodId)) {
+      this._timePeriodId = scopePeriods.at(-1)?.period_id || null;
+    }
+    const allRange = deriveScopeRange("all", {}, entry?.periods || []);
+    if (!this._customStart) this._customStart = allRange?.start || "";
+    if (!this._customEnd) this._customEnd = allRange?.end || "";
+  }
+
+  _scopeRange(entry, context = "overview") {
+    this._ensureTimeSelection(entry, context);
+    return deriveScopeRange(this._timeScope, {
+      year: this._timeYear,
+      periodId: this._timePeriodId,
+      customStart: this._customStart,
+      customEnd: this._customEnd,
+    }, entry?.periods || []);
+  }
+
+  _rangeLabel(range) {
+    if (!range?.start || !range?.end) return "—";
+    const days = periodDurationDays(range.start, range.end);
+    return `${this._date(range.start)} – ${this._date(range.end)}${days ? ` · ${days} ${this._t("daysLong")}` : ""}`;
+  }
+
+  _timeScopeControls(entry, context = "overview") {
+    this._ensureTimeSelection(entry, context);
+    const years = this._availableYears(entry);
+    const periods = this._scopePeriods(entry, context);
+    const range = this._scopeRange(entry, context);
+    const adjacent = adjacentPeriodIds(periods, this._timePeriodId);
+    const help = this._timeScope === "period" ? this._t("billingPeriodHelp") : this._timeScope === "custom" ? this._t("customRangeHelp") : this._timeScope === "all" ? this._t("allDataHelp") : "";
+    const periodSelect = `<select id="scope-period">${periods.map((period) => `<option value="${period.period_id}" ${period.period_id === this._timePeriodId ? "selected" : ""}>${this._typeLabel(period.consumption_type)} · ${this._date(period.start_date)} – ${this._date(period.end_date)}</option>`).join("")}</select>`;
+    return `<section class="card time-scope-card">
+      <div class="time-scope-grid">
+        <label><span>${this._t("timeScope")}</span><select id="time-scope"><option value="all" ${this._timeScope === "all" ? "selected" : ""}>${this._t("scopeAll")}</option><option value="year" ${this._timeScope === "year" ? "selected" : ""}>${this._t("scopeYear")}</option><option value="period" ${this._timeScope === "period" ? "selected" : ""}>${this._t("scopeBilling")}</option><option value="custom" ${this._timeScope === "custom" ? "selected" : ""}>${this._t("scopeCustom")}</option></select></label>
+        ${this._timeScope === "year" ? `<label><span>${this._t("scopeYear")}</span><select id="scope-year">${years.map((year) => `<option value="${year}" ${year === this._timeYear ? "selected" : ""}>${year}</option>`).join("")}</select></label>` : ""}
+        ${this._timeScope === "period" ? `<div class="scope-period-control"><span>${this._t("scopeBilling")}</span><div class="period-nav">${context === "analysis" ? `<button class="icon-button period-arrow" data-action="period-prev" aria-label="${this._t("previousPeriod")}" title="${this._t("previousPeriod")}" ${adjacent.previous ? "" : "disabled"}>‹</button>` : ""}${periodSelect}${context === "analysis" ? `<button class="icon-button period-arrow" data-action="period-next" aria-label="${this._t("nextPeriod")}" title="${this._t("nextPeriod")}" ${adjacent.next ? "" : "disabled"}>›</button>` : ""}</div></div>` : ""}
+        ${this._timeScope === "custom" ? `<label><span>${this._t("customFrom")}</span><input id="scope-custom-start" type="date" value="${this._escape(this._customStart)}"></label><label><span>${this._t("customTo")}</span><input id="scope-custom-end" type="date" value="${this._escape(this._customEnd)}"></label>` : ""}
+        <div class="scope-range"><span>${this._t("selectedRange")}</span><strong>${this._rangeLabel(range)}</strong></div>
+      </div>
+      ${help ? `<p class="muted scope-help">${help}</p>` : ""}
+    </section>`;
+  }
+
+  _typeDailyRows(data, type, range) {
+    const daily = data?.types?.[type]?.daily || [];
+    if (!range && this._timeScope === "custom") return [];
+    return range ? filterDailyRows(daily, range.start, range.end) : daily;
+  }
+
+  _selectedSummary(data, type, range) {
+    return summarizeDailyRows(this._typeDailyRows(data, type, range));
+  }
+
+  _chartRows(data, type, range, granularity) {
+    return aggregateDailyRows(this._typeDailyRows(data, type, range), granularity);
+  }
+
+  _mixRows(data, range) {
+    const grid = aggregateDailyRows(this._typeDailyRows(data, "electricity", range), "monthly");
+    const pv = aggregateDailyRows(this._typeDailyRows(data, "pv_electricity", range), "monthly");
+    const gridMap = new Map(grid.map((row) => [row.key, row]));
+    const pvMap = new Map(pv.map((row) => [row.key, row]));
+    return [...new Set([...gridMap.keys(), ...pvMap.keys()])].sort().map((key) => {
+      const gridValue = Number(gridMap.get(key)?.consumption || 0);
+      const pvValue = Number(pvMap.get(key)?.consumption || 0);
+      const total = gridValue + pvValue;
+      return { key, label: gridMap.get(key)?.label || pvMap.get(key)?.label || key, grid: gridValue, pv: pvValue, total, pv_share: total > 0 ? pvValue / total * 100 : null };
+    });
+  }
+
+  _periodComparison(typeData) {
+    const periods = [...(typeData?.period || [])].sort((a, b) => `${a.start_date}|${a.end_date}|${a.period_id}`.localeCompare(`${b.start_date}|${b.end_date}|${b.period_id}`));
+    if (this._timeScope !== "period" || !periods.length) return null;
+    const index = periods.findIndex((period) => period.period_id === this._timePeriodId);
+    if (index < 0) return null;
+    const current = periods[index];
+    const previous = index > 0 ? periods[index - 1] : null;
+    const pct = (a, b) => (a == null || b == null || Number(b) === 0) ? null : (Number(a) - Number(b)) / Number(b) * 100;
+    return {
+      current,
+      previous,
+      changes: previous ? {
+        consumption_pct: pct(current.consumption, previous.consumption),
+        daily_average_pct: pct(current.daily_average, previous.daily_average),
+        cost_pct: pct(current.cost, previous.cost),
+        unit_price_pct: pct(current.unit_price, previous.unit_price),
+      } : {},
+    };
+  }
+
+  _analysisNarrative(entry, typeData, summary, range) {
+    if (!summary?.days || !range) return this._t("selectionSummaryEmpty");
+    let text = `${this._t("selectionSummaryPrefix")} ${summary.days} ${this._t("daysLong")} (${this._date(summary.start)} – ${this._date(summary.end)}) ${this._t("selectionSummaryTotal")} ${this._num(summary.consumption, 3)} ${this._escape(typeData?.unit || "")}.`;
+    if (this._analysisType === "electricity") {
+      const periods = (entry.periods || []).filter((period) => period.consumption_type === "electricity" && period.end_date >= range.start && period.start_date <= range.end);
+      const weighted = periods.filter((period) => period.electricity_analysis?.distribution === "load_curve").length;
+      const prefix = weighted ? this._t("allocationSummaryLoad") : this._t("allocationSummaryUniform");
+      text += ` ${prefix} ${weighted || periods.length} ${this._t("allocationSummaryPeriods")} ${periods.length}.`;
+    }
+    return text;
+  }
+
+  _chartSlot(id, rows, metric, unit, mode = "line") {
+    const fallback = mode === "bar" ? this._barChart(rows, metric, unit) : this._lineChart(rows, metric, unit);
+    if (!this._pendingCharts) this._pendingCharts = [];
+    this._pendingCharts.push({ id, rows, metric, unit, mode });
+    return `<div id="${id}" class="chart-slot" aria-label="${this._escape(this._t("useNativeChart"))}">${fallback}</div>`;
+  }
+
+  _setupNativeCharts() {
+    if (!customElements.get("ha-chart-base")) return;
+    for (const config of this._pendingCharts || []) {
+      const host = this.shadowRoot.querySelector(`#${config.id}`);
+      if (!host) continue;
+      const values = (config.rows || []).map((row) => ({ label: row.label || row.key, value: row[config.metric] })).filter((row) => row.value != null && Number.isFinite(Number(row.value)));
+      if (!values.length) continue;
+      const chart = document.createElement("ha-chart-base");
+      chart.hass = this._hass;
+      chart.height = "300px";
+      chart.data = [{ id: config.id, name: config.unit || this._t("metric"), type: config.mode, data: values.map((item) => Number(item.value)), smooth: config.mode === "line", showSymbol: config.mode === "line" }];
+      chart.options = {
+        animation: true,
+        grid: { left: 56, right: 20, top: 30, bottom: 50, containLabel: true },
+        tooltip: { trigger: "axis" },
+        xAxis: { type: "category", data: values.map((item) => item.label), axisLabel: { hideOverlap: true } },
+        yAxis: { type: "value", name: config.unit || "", min: 0 },
+      };
+      host.replaceChildren(chart);
+    }
+  }
+
   _render() {
+    this._pendingCharts = [];
     if (!this._data) {
       this.shadowRoot.innerHTML = `<style>${this._styles()}</style><main><div class="loading">…</div></main>`;
       return;
@@ -828,12 +1052,17 @@ class RentalConsumptionPanel extends HTMLElement {
   _overview(entry) {
     const types = ["water", "hot_water", "heating", "electricity", "pv_electricity"];
     const exportStatus = entry.export?.last_status || {};
+    const data = this._analysisEntryId === entry.entry_id ? this._analysisData : null;
+    const range = this._scopeRange(entry, "overview");
+    const electricityRows = data ? this._chartRows(data, "electricity", range, "period") : [];
     return `
       ${this._setupChecklist(entry)}
       ${this._overviewNotices(entry)}
+      ${this._timeScopeControls(entry, "overview")}
       <section class="summary-grid">
-        ${types.map((type) => this._summaryCard(entry, type)).join("")}
+        ${types.map((type) => this._summaryCard(entry, type, data, range)).join("")}
       </section>
+      ${data && electricityRows.length ? `<section class="card chart-card overview-chart"><div class="section-header"><div><h2>${this._t("overviewChartTitle")}</h2><p class="muted">${this._rangeLabel(range)}</p></div></div>${this._chartSlot("overview-period-chart", electricityRows, "consumption", entry.units.electricity || "kWh", "bar")}</section>` : (this._analysisLoading ? `<section class="card"><div class="empty">${this._t("filteredDataLoading")}</div></section>` : "")}
       <section class="overview-grid">
         ${this._overviewAnalysisCard(entry, "electricity", false)}
         ${this._overviewAnalysisCard(entry, "heating", true)}
@@ -841,10 +1070,17 @@ class RentalConsumptionPanel extends HTMLElement {
       </section>`;
   }
 
-  _summaryCard(entry, type) {
+  _summaryCard(entry, type, data = null, range = null) {
     const count = Number(entry.counts?.[type] || 0);
     if (!count) {
       return `<article class="summary-card empty-summary"><span>${this._typeLabel(type)}</span><strong class="empty-title">${this._t("noPeriodEntered")}</strong><button class="button compact" data-action="add-period-type" data-type="${type}">${this._t("addFirstPeriod")}</button></article>`;
+    }
+    if (data && range) {
+      const summary = this._selectedSummary(data, type, range);
+      if (!summary.days) {
+        return `<article class="summary-card empty-summary"><span>${this._typeLabel(type)}</span><strong class="empty-title">${this._t("selectionSummaryEmpty")}</strong></article>`;
+      }
+      return `<article class="summary-card"><span>${this._typeLabel(type)}</span><strong>${this._num(summary.consumption, 3)} <small>${this._escape(entry.units[type])}</small></strong><div>${summary.cost == null ? "—" : `${this._num(summary.cost, 2)} ${this._escape(entry.units.currency)}`}</div><small>${summary.unitPrice == null ? "—" : `${this._num(summary.unitPrice, 4)} ${this._escape(entry.units.unit_prices[type])}`}</small><small class="summary-range">${this._date(summary.start)} – ${this._date(summary.end)} · ${summary.days} ${this._t("daysShort")}</small></article>`;
     }
     return `<article class="summary-card"><span>${this._typeLabel(type)}</span><strong>${this._num(entry.totals[type], 3)} <small>${this._escape(entry.units[type])}</small></strong><div>${this._num(entry.costs[type]?.total, 2)} ${this._escape(entry.units.currency)}</div><small>${entry.costs[type]?.average_unit_price == null ? "—" : `${this._num(entry.costs[type].average_unit_price, 4)} ${this._escape(entry.units.unit_prices[type])}`}</small></article>`;
   }
@@ -928,16 +1164,19 @@ class RentalConsumptionPanel extends HTMLElement {
     if (!data) {
       return `<section class="card"><div class="section-header"><div><h2>${this._t("analysis")}</h2><p class="muted">${this._t("deterministicAnalysis")}</p></div><button class="button primary" data-action="load-analysis">${this._t("refreshAnalysis")}</button></div></section>`;
     }
+    this._ensureTimeSelection(entry, "analysis");
+    const range = this._scopeRange(entry, "analysis");
     const typeData = data.types?.[this._analysisType] || {};
-    const rows = typeData[this._analysisGranularity] || [];
+    const rows = this._chartRows(data, this._analysisType, range, this._analysisGranularity);
+    const summary = this._selectedSummary(data, this._analysisType, range);
     const metric = this._analysisMetric;
     const metricUnit = metric === "consumption" ? (typeData.unit || "") : metric === "cost" ? (typeData.currency || entry.units.currency) : (entry.units.unit_prices?.[this._analysisType] || "");
-    const comparison = typeData.comparison || null;
-    const latest = comparison?.latest || null;
+    const comparison = this._periodComparison(typeData);
     const changes = comparison?.changes || {};
-    const trendLabel = ({up:this._t("trendUp"),down:this._t("trendDown"),stable:this._t("trendStable")})[typeData.trend] || "—";
-    const mix = data.electricity_mix || [];
+    const mix = this._mixRows(data, range);
     const latestMix = mix.length ? mix[mix.length - 1] : null;
+    const narrative = this._analysisNarrative(entry, typeData, summary, range);
+    const chartMode = this._analysisGranularity === "period" ? "bar" : "line";
     return `
       <section class="card analysis-controls">
         <div class="section-header"><div><h2>${this._t("charts")}</h2><p class="muted">${this._t("deterministicAnalysis")}</p></div><button class="button" data-action="refresh-analysis">${this._t("refreshAnalysis")}</button></div>
@@ -947,16 +1186,19 @@ class RentalConsumptionPanel extends HTMLElement {
           <label><span>${this._t("metric")}</span><select id="analysis-metric"><option value="consumption" ${metric==="consumption"?"selected":""}>${this._t("consumption")}</option><option value="cost" ${metric==="cost"?"selected":""}>${this._t("totalCost")}</option><option value="unit_price" ${metric==="unit_price"?"selected":""}>${this._t("unitPrice")}</option></select></label>
         </div>
       </section>
-      <section class="analysis-kpi-grid">
-        <article class="card compact-card"><span>${this._t("latestPeriod")}</span><strong>${latest ? `${this._num(latest.consumption,3)} ${this._escape(typeData.unit||"")}` : "—"}</strong><small>${latest ? `${this._date(latest.start_date)} – ${this._date(latest.end_date)}` : "—"}</small></article>
-        <article class="card compact-card"><span>${this._t("normalizedUse")}</span><strong>${latest ? `${this._num(latest.daily_average,3)} ${this._escape(typeData.unit||"")}${this._t("perDay")}` : "—"}</strong>${this._changeBadge(changes.daily_average_pct)}</article>
-        <article class="card compact-card"><span>${this._t("totalCost")}</span><strong>${latest?.cost == null ? "—" : `${this._num(latest.cost,2)} ${this._escape(typeData.currency||entry.units.currency)}`}</strong>${this._changeBadge(changes.cost_pct)}</article>
-        <article class="card compact-card"><span>${this._t("unitPrice")}</span><strong>${latest?.unit_price == null ? "—" : `${this._num(latest.unit_price,4)} ${this._escape(entry.units.unit_prices?.[this._analysisType]||"")}`}</strong>${this._changeBadge(changes.unit_price_pct)}</article>
-        <article class="card compact-card"><span>${this._t("trend")}</span><strong>${trendLabel}</strong><small>${this._t("vsPrevious")}</small></article>
+      ${this._timeScopeControls(entry, "analysis")}
+      <section class="card selection-summary" aria-live="polite"><h2>${this._t("selectionSummaryTitle")}</h2><p>${narrative}</p></section>
+      <section class="analysis-kpi-grid six">
+        <article class="card compact-card"><span>${this._t("selectionConsumption")}</span><strong>${summary.days ? `${this._num(summary.consumption,3)} ${this._escape(typeData.unit||"")}` : "—"}</strong>${this._timeScope === "period" ? this._changeBadge(changes.consumption_pct) : `<small>${this._rangeLabel(range)}</small>`}</article>
+        <article class="card compact-card"><span>${this._t("normalizedUse")}</span><strong>${summary.dailyAverage == null ? "—" : `${this._num(summary.dailyAverage,3)} ${this._escape(typeData.unit||"")}${this._t("perDay")}`}</strong>${this._timeScope === "period" ? this._changeBadge(changes.daily_average_pct) : ""}</article>
+        <article class="card compact-card"><span>${this._t("totalCost")}</span><strong>${summary.cost == null ? "—" : `${this._num(summary.cost,2)} ${this._escape(typeData.currency||entry.units.currency)}`}</strong>${this._timeScope === "period" ? this._changeBadge(changes.cost_pct) : ""}</article>
+        <article class="card compact-card"><span>${this._t("unitPrice")}</span><strong>${summary.unitPrice == null ? "—" : `${this._num(summary.unitPrice,4)} ${this._escape(entry.units.unit_prices?.[this._analysisType]||"")}`}</strong>${this._timeScope === "period" ? this._changeBadge(changes.unit_price_pct) : ""}</article>
+        <article class="card compact-card"><span>${this._t("costPerDay")}</span><strong>${summary.costPerDay == null ? "—" : `${this._num(summary.costPerDay,2)} ${this._escape(typeData.currency||entry.units.currency)}${this._t("perDay")}`}</strong><small>${summary.days ? `${summary.days} ${this._t("daysLong")}` : "—"}</small></article>
+        <article class="card compact-card"><span>${this._t("coveredPeriod")}</span><strong class="period-kpi">${summary.start ? `${this._date(summary.start)} – ${this._date(summary.end)}` : "—"}</strong><small>${summary.days ? `${summary.days} ${this._t("daysLong")}` : "—"}</small></article>
       </section>
       <section class="card chart-card">
         <h2>${this._typeLabel(this._analysisType)} · ${metric === "consumption" ? this._t("consumption") : metric === "cost" ? this._t("totalCost") : this._t("unitPrice")}</h2>
-        ${this._lineChart(rows, metric, metricUnit)}
+        ${this._chartSlot("analysis-main-chart", rows, metric, metricUnit, chartMode)}
       </section>
       ${(this._analysisType === "electricity" || this._analysisType === "pv_electricity") ? `<section class="card chart-card"><div class="section-header"><div><h2>${this._t("electricityMix")}</h2>${latestMix ? `<span class="muted">${this._t("pvShare")}: ${latestMix.pv_share == null ? "—" : `${this._num(latestMix.pv_share,1)} %`} · ${this._t("totalSupply")}: ${this._num(latestMix.total,2)} kWh</span>` : ""}</div></div>${this._mixChart(mix)}</section>` : ""}
       <section class="analysis-layout">
@@ -991,6 +1233,22 @@ class RentalConsumptionPanel extends HTMLElement {
       <polyline points="${points}" class="chart-line"/>
       ${values.map((item,index)=>`<circle cx="${x(index)}" cy="${y(item.value)}" r="3.5" class="chart-point"><title>${this._escape(item.label)}: ${this._escape(this._num(item.value,metric==="unit_price"?4:2))} ${this._escape(unit)}</title></circle>`).join("")}
       ${values.map((item,index)=>index%tickEvery===0||index===values.length-1?`<text x="${x(index)}" y="${height-18}" text-anchor="middle" class="axis-text x-label">${this._escape(item.label)}</text>`:"").join("")}
+    </svg><div class="chart-unit">${this._escape(unit)}</div></div>`;
+  }
+
+  _barChart(rows, metric, unit) {
+    const values = (rows || []).map((row) => ({ label: row.label || row.key, value: row[metric] })).filter((row) => row.value != null && Number.isFinite(Number(row.value)));
+    if (!values.length) return `<div class="empty">${this._t("noAnalysisData")}</div>`;
+    const width = 920, height = 300, left = 64, right = 24, top = 22, bottom = 54;
+    const innerW = width-left-right, innerH = height-top-bottom;
+    const max = Math.max(...values.map((item)=>Number(item.value)), 1);
+    const slot = innerW / values.length;
+    const barW = Math.min(58, slot * 0.66);
+    const y = (value) => top + innerH - (Number(value) / max) * innerH;
+    const tickEvery = Math.max(1, Math.ceil(values.length/8));
+    return `<div class="svg-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(unit)}">
+      ${Array.from({length:5},(_,i)=>{const tick=max*i/4,yy=y(tick);return `<line x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}" class="grid-line"/><text x="${left-10}" y="${yy+4}" text-anchor="end" class="axis-text">${this._escape(this._num(tick,metric==="unit_price"?4:2))}</text>`}).join("")}
+      ${values.map((item,index)=>{const xx=left+slot*index+(slot-barW)/2;const yy=y(item.value);const h=top+innerH-yy;return `<rect x="${xx}" y="${yy}" width="${barW}" height="${h}" class="bar-grid"><title>${this._escape(item.label)}: ${this._escape(this._num(item.value,metric==="unit_price"?4:2))} ${this._escape(unit)}</title></rect>${index%tickEvery===0||index===values.length-1?`<text x="${xx+barW/2}" y="${height-18}" text-anchor="middle" class="axis-text x-label">${this._escape(item.label)}</text>`:""}`}).join("")}
     </svg><div class="chart-unit">${this._escape(unit)}</div></div>`;
   }
 
@@ -1301,9 +1559,14 @@ class RentalConsumptionPanel extends HTMLElement {
       this._selectedEntryId = event.target.value;
       this._editingPeriodId = null;
       this._historyProvider = "all";
+      this._timeScope = "all";
+      this._timeYear = "";
+      this._timePeriodId = null;
+      this._customStart = "";
+      this._customEnd = "";
       this._invalidateAnalysis();
       this._render();
-      if (this._activeTab === "analysis") this._loadAnalysis();
+      if (this._activeTab === "overview" || this._activeTab === "analysis") this._loadAnalysis();
     });
     this.shadowRoot.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => {
       if (this._activeTab === "settings" && button.dataset.tab !== "settings" && !this._confirmDiscardChanges()) return;
@@ -1311,7 +1574,7 @@ class RentalConsumptionPanel extends HTMLElement {
       this._activeTab = button.dataset.tab;
       this._message = null;
       this._render();
-      if (this._activeTab === "analysis") this._loadAnalysis();
+      if (this._activeTab === "overview" || this._activeTab === "analysis") this._loadAnalysis();
     }));
     this.shadowRoot.querySelector('[data-action="open-settings"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._render(); });
     this.shadowRoot.querySelector('[data-action="open-settings-advanced"]')?.addEventListener("click", () => { this._activeTab = "settings"; this._advancedSettingsOpen = true; this._render(); });
@@ -1366,7 +1629,37 @@ class RentalConsumptionPanel extends HTMLElement {
     this.shadowRoot.querySelectorAll('[data-action="delete"]').forEach((button) => button.addEventListener("click", () => this._deletePeriod(button.dataset.id)));
     this.shadowRoot.querySelector('[data-action="load-analysis"]')?.addEventListener("click", () => this._loadAnalysis(true));
     this.shadowRoot.querySelector('[data-action="refresh-analysis"]')?.addEventListener("click", () => this._loadAnalysis(true));
-    this.shadowRoot.querySelector("#analysis-type")?.addEventListener("change", (event) => { this._analysisType = event.target.value; this._render(); });
+    this.shadowRoot.querySelector("#time-scope")?.addEventListener("change", (event) => {
+      this._timeScope = event.target.value;
+      this._ensureTimeSelection(this._entry, this._activeTab === "analysis" ? "analysis" : "overview");
+      this._render();
+      if (!this._analysisData) this._loadAnalysis();
+    });
+    this.shadowRoot.querySelector("#scope-year")?.addEventListener("change", (event) => { this._timeYear = event.target.value; this._render(); });
+    this.shadowRoot.querySelector("#scope-period")?.addEventListener("change", (event) => { this._timePeriodId = event.target.value; this._render(); });
+    this.shadowRoot.querySelector("#scope-custom-start")?.addEventListener("change", (event) => {
+      this._customStart = event.target.value;
+      if (this._customEnd && this._customStart > this._customEnd) this._message = { kind: "error", text: this._t("invalidCustomRange") };
+      else this._message = null;
+      this._render();
+    });
+    this.shadowRoot.querySelector("#scope-custom-end")?.addEventListener("change", (event) => {
+      this._customEnd = event.target.value;
+      if (this._customStart && this._customEnd < this._customStart) this._message = { kind: "error", text: this._t("invalidCustomRange") };
+      else this._message = null;
+      this._render();
+    });
+    this.shadowRoot.querySelector('[data-action="period-prev"]')?.addEventListener("click", () => {
+      const periods = this._scopePeriods(this._entry, "analysis");
+      const adjacent = adjacentPeriodIds(periods, this._timePeriodId);
+      if (adjacent.previous) { this._timePeriodId = adjacent.previous; this._render(); }
+    });
+    this.shadowRoot.querySelector('[data-action="period-next"]')?.addEventListener("click", () => {
+      const periods = this._scopePeriods(this._entry, "analysis");
+      const adjacent = adjacentPeriodIds(periods, this._timePeriodId);
+      if (adjacent.next) { this._timePeriodId = adjacent.next; this._render(); }
+    });
+    this.shadowRoot.querySelector("#analysis-type")?.addEventListener("change", (event) => { this._analysisType = event.target.value; if (this._timeScope === "period") this._timePeriodId = null; this._render(); });
     this.shadowRoot.querySelector("#analysis-granularity")?.addEventListener("change", (event) => { this._analysisGranularity = event.target.value; this._render(); });
     this.shadowRoot.querySelector("#analysis-metric")?.addEventListener("change", (event) => { this._analysisMetric = event.target.value; this._render(); });
     this.shadowRoot.querySelectorAll("[data-picker-fallback]").forEach((field) => field.addEventListener("input", () => {
@@ -1381,6 +1674,7 @@ class RentalConsumptionPanel extends HTMLElement {
     this._periodTypeChanged(this.shadowRoot.querySelector("#consumption-type")?.value);
     this._updateExportFields();
     this._setupEntityPickers();
+    this._setupNativeCharts();
   }
   _periodTypeChanged(type) {
     if (!type) return;
@@ -1651,24 +1945,25 @@ class RentalConsumptionPanel extends HTMLElement {
       .page-header,.section-header{display:flex;justify-content:space-between;align-items:center;gap:16px}.page-header{margin-bottom:18px}.page-header p,.muted,.help,small{color:var(--secondary-text-color)}
       .card,.summary-card,.period-row{background:var(--ha-card-background,var(--card-background-color));border-radius:var(--ha-card-border-radius,12px);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,none)}.card{padding:20px;margin-bottom:16px}
       .picker-row{display:grid;grid-template-columns:minmax(280px,1fr) auto;align-items:end;gap:14px}.picker-card label{display:grid;grid-template-columns:auto minmax(240px,1fr);align-items:center;gap:14px}.picker-card span{color:var(--secondary-text-color);font-size:13px}.picker-help{display:block;margin-top:10px}.apartment-actions{display:flex;gap:8px;flex-wrap:wrap}
-      .tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 16px;padding:4px;background:var(--secondary-background-color);border-radius:12px;border:1px solid var(--divider-color)}.tab{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;cursor:pointer;white-space:nowrap}.tab.active{background:var(--card-background-color);color:var(--primary-color);box-shadow:var(--ha-card-box-shadow,0 1px 3px rgba(0,0,0,.12))}
+      .tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 16px;padding:4px;background:var(--secondary-background-color);border-radius:12px;border:1px solid var(--divider-color)}.tab{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;cursor:pointer;white-space:nowrap}.tab.active{background:var(--card-background-color);color:var(--primary-color);box-shadow:var(--ha-card-box-shadow,none)}
       .summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.summary-card{padding:16px;border-top:3px solid var(--primary-color)}.summary-card>span,.metric>span,.analysis-grid span,.analysis-mini span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:5px}.summary-card strong{font-size:20px}.summary-card small{font-size:12px}
       .overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.compact-card{margin-bottom:0}.analysis-mini{display:grid;gap:10px}.analysis-mini>div{display:grid;grid-template-columns:1fr auto;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--divider-color)}.analysis-mini>div:last-child{border-bottom:0;padding-bottom:0}
       .form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.form-grid label,.tariff-grid label{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:12px}.form-grid label small{line-height:1.35}.wide{grid-column:1/-1}
       input,select,textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:8px;padding:9px 10px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit}textarea{resize:vertical}.input-unit{display:flex;border:1px solid var(--divider-color);border-radius:8px;overflow:hidden;background:var(--secondary-background-color)}.input-unit input{border:0;background:transparent}.input-unit span{padding:11px;color:var(--secondary-text-color);white-space:nowrap}
-      .check{flex-direction:row!important;align-items:center;font-size:14px!important}.check input{width:auto;min-height:auto}.help,.warning{padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);font-size:12px}.warning{color:var(--warning-color,#ff9800)}
-      .actions,.export-actions,.sticky-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:14px}.button,.icon-button{border:0;border-radius:8px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font:inherit}.button.primary{background:var(--primary-color);color:var(--text-primary-color,#fff)}.button.subtle{background:transparent}.button.danger{background:transparent;border:1px solid var(--error-color,#db4437);color:var(--error-color,#db4437)}.button.compact{padding:6px 9px;font-size:12px}.button:disabled{opacity:.45;cursor:not-allowed}.icon-button{font-size:20px}
-      .message{padding:12px 14px;border-radius:8px;margin-bottom:14px}.message.success{background:color-mix(in srgb,var(--success-color,#43a047) 16%,var(--card-background-color));border:1px solid var(--success-color,#43a047)}.message.error{background:color-mix(in srgb,var(--error-color,#db4437) 14%,var(--card-background-color));border:1px solid var(--error-color,#db4437)}
+      .check{flex-direction:row!important;align-items:center;font-size:14px!important}.check input{width:auto;min-height:auto}.help,.warning{padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);font-size:12px}.warning{color:var(--warning-color)}
+      .actions,.export-actions,.sticky-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:14px}.button,.icon-button{border:0;border-radius:8px;padding:9px 13px;background:var(--secondary-background-color);color:var(--primary-text-color);cursor:pointer;font:inherit}.button.primary{background:var(--primary-color);color:var(--text-primary-color)}.button.subtle{background:transparent}.button.danger{background:transparent;border:1px solid var(--error-color);color:var(--error-color)}.button.compact{padding:6px 9px;font-size:12px}.button:disabled{opacity:.45;cursor:not-allowed}.icon-button{font-size:20px}
+      .message{padding:12px 14px;border-radius:8px;margin-bottom:14px}.message.success{background:color-mix(in srgb,var(--success-color) 16%,var(--card-background-color));border:1px solid var(--success-color)}.message.error{background:color-mix(in srgb,var(--error-color) 14%,var(--card-background-color));border:1px solid var(--error-color)}
       .analysis-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px}.analysis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.analysis-grid>div{padding:13px;background:var(--secondary-background-color);border-radius:9px}.analysis-grid strong{word-break:break-word}
-      .analysis-controls .section-header p{margin:5px 0 0}.analysis-toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.analysis-toolbar label{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:12px}.analysis-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.analysis-kpi-grid .compact-card{padding:15px}.analysis-kpi-grid span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:6px}.analysis-kpi-grid strong{font-size:17px;display:block}.analysis-kpi-grid small{display:block;margin-top:6px}.change.up{color:var(--warning-color,#f4b400)}.change.down{color:var(--primary-color)}.change.neutral{color:var(--secondary-text-color)}.chart-card h2{margin-bottom:14px}.svg-chart{position:relative;width:100%;overflow-x:auto}.svg-chart svg{width:100%;min-width:620px;height:auto;display:block}.grid-line{stroke:var(--divider-color);stroke-width:1}.axis-text{fill:var(--secondary-text-color);font-size:11px}.x-label{font-size:10px}.chart-line{fill:none;stroke:var(--primary-color);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}.chart-point{fill:var(--primary-color);stroke:var(--card-background-color);stroke-width:1.5}.chart-unit{position:absolute;top:0;left:0;color:var(--secondary-text-color);font-size:11px}.bar-grid{fill:var(--primary-color)}.bar-pv{fill:var(--warning-color,#f4b400)}.chart-legend{display:flex;gap:16px;justify-content:flex-end;color:var(--secondary-text-color);font-size:12px;margin-bottom:2px}.chart-legend span{display:flex;gap:6px;align-items:center}.chart-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}.legend-grid{background:var(--primary-color)}.legend-pv{background:var(--warning-color,#f4b400)}
-      .history-toolbar{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}.history-toolbar select{width:auto;min-width:180px}.period-list{display:grid;gap:10px}.period-row{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.8fr) minmax(170px,.9fr) minmax(220px,1fr) auto;gap:16px;align-items:center;padding:15px}.period-main{display:flex;align-items:center;gap:11px}.period-main strong,.period-main span,.period-main small{display:block}.period-main span,.provider-line{color:var(--secondary-text-color);font-size:12px;margin-top:4px}.provider-line{font-weight:600}.type-icon{font-size:22px;width:34px;height:34px;display:grid;place-items:center;background:var(--secondary-background-color);border-radius:9px}.metric strong{display:block;font-size:15px}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.badge.accent{color:var(--primary-color);border:1px solid color-mix(in srgb,var(--primary-color) 35%,transparent)}.period-actions{display:flex;gap:6px}.tariff-detail,.period-note{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.tariff-detail{display:flex;gap:20px}.tariff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.empty{text-align:center;padding:28px;color:var(--secondary-text-color)}
-      .settings-card h2{margin-bottom:16px}.sticky-actions{position:sticky;bottom:8px;z-index:3;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--card-background-color) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--divider-color);margin-bottom:16px}.export-status{margin-top:18px;padding:14px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.compact-status{margin-top:8px}.status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--disabled-text-color,#888)}.status-dot.ok{background:var(--success-color,#43a047)}.status-dot.error{background:var(--error-color,#db4437)}.status-dot.testing{background:var(--warning-color,#ff9800)}.status-message{margin-top:8px;color:var(--secondary-text-color);font-size:12px;word-break:break-word}.status-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.step{font-size:11px;padding:5px 8px;border-radius:999px;background:var(--card-background-color);border:1px solid var(--divider-color)}.step.ok{color:var(--success-color,#43a047)}.step.error{color:var(--error-color,#db4437)}
+      .analysis-controls .section-header p{margin:5px 0 0}.analysis-toolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.analysis-toolbar label{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:12px}.analysis-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.analysis-kpi-grid .compact-card{padding:15px}.analysis-kpi-grid span{display:block;color:var(--secondary-text-color);font-size:12px;margin-bottom:6px}.analysis-kpi-grid strong{font-size:17px;display:block}.analysis-kpi-grid small{display:block;margin-top:6px}.change.up{color:var(--warning-color)}.change.down{color:var(--primary-color)}.change.neutral{color:var(--secondary-text-color)}.chart-card h2{margin-bottom:14px}.svg-chart{position:relative;width:100%;overflow-x:auto}.svg-chart svg{width:100%;min-width:620px;height:auto;display:block}.grid-line{stroke:var(--divider-color);stroke-width:1}.axis-text{fill:var(--secondary-text-color);font-size:12px}.x-label{font-size:12px}.chart-line{fill:none;stroke:var(--primary-color);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}.chart-point{fill:var(--primary-color);stroke:var(--card-background-color);stroke-width:1.5}.chart-unit{position:absolute;top:0;left:0;color:var(--secondary-text-color);font-size:12px}.bar-grid{fill:var(--primary-color)}.bar-pv{fill:var(--warning-color)}.chart-legend{display:flex;gap:16px;justify-content:flex-end;color:var(--secondary-text-color);font-size:12px;margin-bottom:2px}.chart-legend span{display:flex;gap:6px;align-items:center}.chart-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}.legend-grid{background:var(--primary-color)}.legend-pv{background:var(--warning-color)}
+      .history-toolbar{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}.history-toolbar select{width:auto;min-width:180px}.period-list{display:grid;gap:10px}.period-row{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(160px,.8fr) minmax(170px,.9fr) minmax(220px,1fr) auto;gap:16px;align-items:center;padding:15px}.period-main{display:flex;align-items:center;gap:11px}.period-main strong,.period-main span,.period-main small{display:block}.period-main span,.provider-line{color:var(--secondary-text-color);font-size:12px;margin-top:4px}.provider-line{font-weight:600}.type-icon{font-size:22px;width:34px;height:34px;display:grid;place-items:center;background:var(--secondary-background-color);border-radius:9px}.metric strong{display:block;font-size:15px}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.badge.accent{color:var(--primary-color);border:1px solid color-mix(in srgb,var(--primary-color) 35%,transparent)}.period-actions{display:flex;gap:6px}.tariff-detail,.period-note{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.tariff-detail{display:flex;gap:20px}.tariff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.empty{text-align:center;padding:28px;color:var(--secondary-text-color)}
+      .time-scope-card{padding:16px 20px}.time-scope-grid{display:grid;grid-template-columns:minmax(180px,.8fr) repeat(3,minmax(160px,1fr));gap:12px;align-items:end}.time-scope-grid label,.scope-period-control,.scope-range{display:flex;flex-direction:column;gap:6px;color:var(--secondary-text-color);font-size:13px}.scope-range strong{color:var(--primary-text-color);font-size:14px;line-height:1.35}.scope-help{margin:10px 0 0;font-size:13px}.period-nav{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:7px;align-items:center}.period-arrow{min-width:42px;height:42px;padding:0;font-size:24px}.selection-summary{border-color:color-mix(in srgb,var(--primary-color) 35%,var(--divider-color))}.selection-summary h2{margin-bottom:8px}.selection-summary p{margin:0;color:var(--secondary-text-color);font-size:14px;line-height:1.5}.analysis-kpi-grid.six{grid-template-columns:repeat(6,minmax(0,1fr))}.period-kpi{font-size:14px!important;line-height:1.3}.summary-range{display:block;margin-top:7px;color:var(--secondary-text-color);font-size:12px}.chart-slot ha-chart-base{display:block;width:100%;min-height:300px}.overview-chart .section-header{margin-bottom:10px}
+      .settings-card h2{margin-bottom:16px}.sticky-actions{position:sticky;bottom:8px;z-index:3;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--card-background-color) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--divider-color);margin-bottom:16px}.export-status{margin-top:18px;padding:14px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.compact-status{margin-top:8px}.status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--disabled-text-color)}.status-dot.ok{background:var(--success-color)}.status-dot.error{background:var(--error-color)}.status-dot.testing{background:var(--warning-color)}.status-message{margin-top:8px;color:var(--secondary-text-color);font-size:12px;word-break:break-word}.status-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.step{font-size:12px;padding:5px 8px;border-radius:999px;background:var(--card-background-color);border:1px solid var(--divider-color)}.step.ok{color:var(--success-color)}.step.error{color:var(--error-color)}
 
-      .field-label{display:flex!important;align-items:center;gap:6px!important;min-height:20px}.required-marker{color:var(--error-color,#db4437);margin-left:3px}.optional-marker{margin-left:6px;color:var(--secondary-text-color);font-size:11px;font-weight:400}.help-icon{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:11px;font-weight:700;cursor:help;flex:0 0 auto}.help-icon::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:320px;padding:8px 10px;border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,0 4px 12px rgba(0,0,0,.25));font-size:12px;font-weight:400;line-height:1.35;opacity:0;visibility:hidden;pointer-events:none;z-index:50;white-space:normal}.help-icon:hover::after,.help-icon:focus::after{opacity:1;visibility:visible}.entity-picker-wrap{display:grid;gap:5px}.entity-picker-wrap ha-entity-picker{width:100%}.entity-picker-fallback{display:none}.entity-picker-wrap ha-entity-picker:not(:defined){display:none}.entity-picker-wrap ha-entity-picker:not(:defined)+.entity-picker-fallback{display:block}.advanced-toggle-card{padding:14px 20px}.advanced-toggle{padding-left:0}.advanced-content{padding-top:14px;border-top:1px solid var(--divider-color);margin-top:10px}.backend-options{margin-top:14px;padding:12px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.backend-options summary{cursor:pointer;font-weight:600;color:var(--primary-text-color);margin-bottom:12px}.options-grid{margin-top:12px}.unsaved-warning{margin:10px 0;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning-color,#ff9800) 12%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));color:var(--primary-text-color);font-size:13px}.message-action,.status-action{margin-top:8px;font-size:13px}.technical-details{margin-top:10px}.technical-details summary{cursor:pointer;color:var(--secondary-text-color);font-size:12px}.technical-details pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:11px;max-height:180px;overflow:auto}.context-alert{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;border-radius:10px;border:1px solid var(--divider-color);background:var(--card-background-color);font-size:13px}.context-alert>div>div{margin-top:4px;color:var(--secondary-text-color)}.warning-alert{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 55%,var(--divider-color));background:color-mix(in srgb,var(--warning-color,#ff9800) 9%,var(--card-background-color))}.error-alert{border-color:color-mix(in srgb,var(--error-color,#db4437) 55%,var(--divider-color));background:color-mix(in srgb,var(--error-color,#db4437) 8%,var(--card-background-color))}.action-description{margin-top:8px;color:var(--secondary-text-color);font-size:12px;text-align:right}.status-dot.warning{background:var(--warning-color,#ff9800)}.status-dot.neutral{background:var(--disabled-text-color,#888)}.export-status.level-warning{border-color:color-mix(in srgb,var(--warning-color,#ff9800) 50%,var(--divider-color))}.export-status.level-error{border-color:color-mix(in srgb,var(--error-color,#db4437) 50%,var(--divider-color))}.export-status.level-ok{border-color:color-mix(in srgb,var(--success-color,#43a047) 45%,var(--divider-color))}.status-steps .step{font-size:12px}.status-message{font-size:13px!important;color:var(--primary-text-color)!important}
-      .setup-card{border-color:color-mix(in srgb,var(--primary-color) 35%,var(--divider-color))}.setup-card p{margin:5px 0 0}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.setup-step{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.setup-step.done{opacity:.82}.setup-check{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--divider-color);font-weight:700}.setup-step.done .setup-check{color:var(--success-color,#43a047);border-color:color-mix(in srgb,var(--success-color,#43a047) 60%,var(--divider-color))}.setup-step.pending .setup-check{color:var(--warning-color,#ff9800)}.setup-step strong,.setup-step small{display:block}.setup-step small,.setup-done{color:var(--secondary-text-color);font-size:12px}.empty-summary{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}.empty-summary .empty-title{font-size:14px}.inline-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;color:var(--secondary-text-color);font-size:13px}.warning-inline{color:var(--primary-text-color)}.period-duration{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px}.period-duration small{color:var(--secondary-text-color)}.date-picker-wrap{display:grid;gap:4px}.date-picker-wrap ha-date-input{width:100%}.date-picker-fallback{width:100%}.pricing-help{margin-top:-4px}.recorder-action{display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:430px}.recorder-action small{color:var(--secondary-text-color);font-size:12px;text-align:right;line-height:1.35}.button[aria-busy="true"]{opacity:.72}.modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:0 18px 55px rgba(0,0,0,.32)}.modal-card .section-header{margin-bottom:16px}
+      .field-label{display:flex!important;align-items:center;gap:6px!important;min-height:20px}.required-marker{color:var(--error-color);margin-left:3px}.optional-marker{margin-left:6px;color:var(--secondary-text-color);font-size:12px;font-weight:400}.help-icon{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px;font-weight:700;cursor:help;flex:0 0 auto}.help-icon::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:320px;padding:8px 10px;border-radius:8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);box-shadow:var(--ha-card-box-shadow,none);font-size:12px;font-weight:400;line-height:1.35;opacity:0;visibility:hidden;pointer-events:none;z-index:50;white-space:normal}.help-icon:hover::after,.help-icon:focus::after{opacity:1;visibility:visible}.entity-picker-wrap{display:grid;gap:5px}.entity-picker-wrap ha-entity-picker{width:100%}.entity-picker-fallback{display:none}.entity-picker-wrap ha-entity-picker:not(:defined){display:none}.entity-picker-wrap ha-entity-picker:not(:defined)+.entity-picker-fallback{display:block}.advanced-toggle-card{padding:14px 20px}.advanced-toggle{padding-left:0}.advanced-content{padding-top:14px;border-top:1px solid var(--divider-color);margin-top:10px}.backend-options{margin-top:14px;padding:12px 0;border-top:1px solid var(--divider-color);border-bottom:1px solid var(--divider-color)}.backend-options summary{cursor:pointer;font-weight:600;color:var(--primary-text-color);margin-bottom:12px}.options-grid{margin-top:12px}.unsaved-warning{margin:10px 0;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning-color) 12%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--warning-color) 55%,var(--divider-color));color:var(--primary-text-color);font-size:13px}.message-action,.status-action{margin-top:8px;font-size:13px}.technical-details{margin-top:10px}.technical-details summary{cursor:pointer;color:var(--secondary-text-color);font-size:12px}.technical-details pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:12px;max-height:180px;overflow:auto}.context-alert{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;border-radius:10px;border:1px solid var(--divider-color);background:var(--card-background-color);font-size:13px}.context-alert>div>div{margin-top:4px;color:var(--secondary-text-color)}.warning-alert{border-color:color-mix(in srgb,var(--warning-color) 55%,var(--divider-color));background:color-mix(in srgb,var(--warning-color) 9%,var(--card-background-color))}.error-alert{border-color:color-mix(in srgb,var(--error-color) 55%,var(--divider-color));background:color-mix(in srgb,var(--error-color) 8%,var(--card-background-color))}.action-description{margin-top:8px;color:var(--secondary-text-color);font-size:12px;text-align:right}.status-dot.warning{background:var(--warning-color)}.status-dot.neutral{background:var(--disabled-text-color)}.export-status.level-warning{border-color:color-mix(in srgb,var(--warning-color) 50%,var(--divider-color))}.export-status.level-error{border-color:color-mix(in srgb,var(--error-color) 50%,var(--divider-color))}.export-status.level-ok{border-color:color-mix(in srgb,var(--success-color) 45%,var(--divider-color))}.status-steps .step{font-size:12px}.status-message{font-size:13px!important;color:var(--primary-text-color)!important}
+      .setup-card{border-color:color-mix(in srgb,var(--primary-color) 35%,var(--divider-color))}.setup-card p{margin:5px 0 0}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.setup-step{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--divider-color);border-radius:10px;background:var(--secondary-background-color)}.setup-step.done{opacity:.82}.setup-check{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--divider-color);font-weight:700}.setup-step.done .setup-check{color:var(--success-color);border-color:color-mix(in srgb,var(--success-color) 60%,var(--divider-color))}.setup-step.pending .setup-check{color:var(--warning-color)}.setup-step strong,.setup-step small{display:block}.setup-step small,.setup-done{color:var(--secondary-text-color);font-size:12px}.empty-summary{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}.empty-summary .empty-title{font-size:14px}.inline-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;color:var(--secondary-text-color);font-size:13px}.warning-inline{color:var(--primary-text-color)}.period-duration{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:13px}.period-duration small{color:var(--secondary-text-color)}.date-picker-wrap{display:grid;gap:4px}.date-picker-wrap ha-date-input{width:100%}.date-picker-fallback{width:100%}.pricing-help{margin-top:-4px}.recorder-action{display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:430px}.recorder-action small{color:var(--secondary-text-color);font-size:12px;text-align:right;line-height:1.35}.button[aria-busy="true"]{opacity:.72}.modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:color-mix(in srgb,var(--primary-background-color) 48%,transparent);backdrop-filter:blur(4px)}.modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;padding:20px;background:var(--ha-card-background,var(--card-background-color));border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,14px);box-shadow:var(--ha-card-box-shadow,none)}.modal-card .section-header{margin-bottom:16px}
       .hidden{display:none!important}
-      @media(max-width:1100px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
-      @media(max-width:700px){main{padding:14px 10px 40px}.setup-steps{grid-template-columns:1fr}.setup-step{grid-template-columns:auto 1fr}.setup-step .button,.setup-done{grid-column:2}.inline-empty{align-items:flex-start;flex-direction:column}.period-duration{align-items:flex-start;flex-direction:column}.recorder-action{align-items:flex-start;max-width:none;width:100%}.recorder-action small{text-align:left}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
+      @media(max-width:1100px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-layout{grid-template-columns:1fr}.analysis-kpi-grid,.analysis-kpi-grid.six{grid-template-columns:repeat(2,minmax(0,1fr))}.time-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.period-row{grid-template-columns:1.4fr 1fr 1fr}.badges{grid-column:1/3}.period-actions{grid-column:3;grid-row:2}}
+      @media(max-width:700px){main{padding:14px 10px 40px}.setup-steps{grid-template-columns:1fr}.setup-step{grid-template-columns:auto 1fr}.setup-step .button,.setup-done{grid-column:2}.inline-empty{align-items:flex-start;flex-direction:column}.period-duration{align-items:flex-start;flex-direction:column}.recorder-action{align-items:flex-start;max-width:none;width:100%}.recorder-action small{text-align:left}.context-alert{align-items:flex-start;flex-direction:column}.context-alert .button{width:100%}.help-icon::after{left:auto;right:0;transform:none;max-width:260px}.page-header,.section-header{align-items:flex-start;flex-direction:column}.summary-grid,.form-grid,.analysis-grid,.tariff-grid,.analysis-toolbar,.analysis-kpi-grid,.analysis-kpi-grid.six,.time-scope-grid{grid-template-columns:1fr}.wide{grid-column:auto}.picker-row{grid-template-columns:1fr}.picker-card label{grid-template-columns:1fr}.apartment-actions .button{flex:1}.tabs{border-radius:10px}.tab{padding:9px 12px}.period-nav{grid-template-columns:42px minmax(0,1fr) 42px}.scope-range{margin-top:2px}.history-toolbar{flex-direction:column}.history-toolbar select{width:100%}.period-row{grid-template-columns:1fr;gap:12px;padding:14px}.badges,.period-actions,.tariff-detail,.period-note{grid-column:1}.period-actions{grid-row:auto;justify-content:flex-end}.tariff-detail{flex-direction:column;gap:6px}.actions,.export-actions,.sticky-actions{flex-wrap:wrap;justify-content:stretch}.actions .button,.export-actions .button,.sticky-actions .button{flex:1}.sticky-actions{bottom:4px}}
     `;
   }
 }

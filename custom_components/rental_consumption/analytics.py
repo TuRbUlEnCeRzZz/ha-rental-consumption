@@ -23,51 +23,104 @@ def _bucket_label(key: str, granularity: str) -> str:
     return key
 
 
-def _aggregate_daily(
+def _daily_rows(
     periods: list[ConsumptionPeriod],
     weights_by_period: Mapping[str, Mapping[date, float]] | None,
-    granularity: str,
 ) -> list[dict[str, Any]]:
-    buckets: dict[str, dict[str, float]] = defaultdict(
-        lambda: {"consumption": 0.0, "cost": 0.0, "priced_consumption": 0.0}
-    )
-    for period in periods:
-        weights = None if weights_by_period is None else weights_by_period.get(period.period_id)
+    """Return exact daily reconstructed values with their source period."""
+    rows: list[dict[str, Any]] = []
+    for period in sorted(
+        periods, key=lambda p: (p.start_date, p.end_date, p.period_id)
+    ):
+        weights = (
+            None
+            if weights_by_period is None
+            else weights_by_period.get(period.period_id)
+        )
         daily_consumption = distribute_total(
             period.start_date, period.end_date, period.value, weights
         )
         daily_cost = (
-            dict(distribute_total(period.start_date, period.end_date, period.cost, weights))
+            dict(
+                distribute_total(
+                    period.start_date, period.end_date, period.cost, weights
+                )
+            )
             if period.cost is not None
             else {}
         )
-        for day, amount in daily_consumption:
-            key = day.strftime("%Y-%m") if granularity == "monthly" else day.strftime("%Y")
-            bucket = buckets[key]
-            bucket["consumption"] += amount
-            if period.cost is not None:
-                bucket["priced_consumption"] += amount
-                bucket["cost"] += daily_cost.get(day, 0.0)
 
-    rows: list[dict[str, Any]] = []
+        for day, amount in daily_consumption:
+            cost = daily_cost.get(day) if period.cost is not None else None
+            rows.append(
+                {
+                    "key": day.isoformat(),
+                    "label": day.strftime("%d/%m/%Y"),
+                    "date": day.isoformat(),
+                    "period_id": period.period_id,
+                    "period_start_date": period.start_date.isoformat(),
+                    "period_end_date": period.end_date.isoformat(),
+                    "period_label": (
+                        f"{period.start_date:%d/%m/%Y}–"
+                        f"{period.end_date:%d/%m/%Y}"
+                    ),
+                    "consumption": amount,
+                    "cost": cost,
+                    "priced_consumption": amount if cost is not None else 0.0,
+                    "unit_price": (
+                        (cost / amount)
+                        if cost is not None and amount > 0
+                        else None
+                    ),
+                    "provider": period.provider,
+                }
+            )
+    return rows
+
+
+def _aggregate_daily_rows(
+    daily_rows: list[dict[str, Any]], granularity: str
+) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {
+            "consumption": 0.0,
+            "cost": 0.0,
+            "priced_consumption": 0.0,
+        }
+    )
+    for row in daily_rows:
+        day = date.fromisoformat(str(row["date"]))
+        key = day.strftime("%Y-%m") if granularity == "monthly" else day.strftime("%Y")
+        bucket = buckets[key]
+        bucket["consumption"] += float(row["consumption"])
+        if row["cost"] is not None:
+            bucket["priced_consumption"] += float(row["priced_consumption"])
+            bucket["cost"] += float(row["cost"])
+
+    result: list[dict[str, Any]] = []
     for key in sorted(buckets):
         bucket = buckets[key]
-        priced = bucket["priced_consumption"]
-        rows.append(
+        priced = float(bucket["priced_consumption"])
+        result.append(
             {
                 "key": key,
                 "label": _bucket_label(key, granularity),
-                "consumption": bucket["consumption"],
-                "cost": bucket["cost"] if priced > 0 else None,
-                "unit_price": bucket["cost"] / priced if priced > 0 else None,
+                "consumption": float(bucket["consumption"]),
+                "cost": float(bucket["cost"]) if priced > 0 else None,
+                "priced_consumption": priced,
+                "unit_price": (
+                    float(bucket["cost"]) / priced if priced > 0 else None
+                ),
             }
         )
-    return rows
+    return result
 
 
 def _period_rows(periods: list[ConsumptionPeriod]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for period in sorted(periods, key=lambda p: (p.start_date, p.end_date, p.period_id)):
+    for period in sorted(
+        periods, key=lambda p: (p.start_date, p.end_date, p.period_id)
+    ):
         rows.append(
             {
                 "period_id": period.period_id,
@@ -95,10 +148,16 @@ def _comparison(period_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         result["changes"] = {}
         return result
     result["changes"] = {
-        "consumption_pct": _pct_change(latest["consumption"], previous["consumption"]),
-        "daily_average_pct": _pct_change(latest["daily_average"], previous["daily_average"]),
+        "consumption_pct": _pct_change(
+            latest["consumption"], previous["consumption"]
+        ),
+        "daily_average_pct": _pct_change(
+            latest["daily_average"], previous["daily_average"]
+        ),
         "cost_pct": _pct_change(latest["cost"], previous["cost"]),
-        "unit_price_pct": _pct_change(latest["unit_price"], previous["unit_price"]),
+        "unit_price_pct": _pct_change(
+            latest["unit_price"], previous["unit_price"]
+        ),
     }
     return result
 
@@ -119,26 +178,44 @@ def build_analysis_payload(
     periods: list[ConsumptionPeriod],
     units: Mapping[str, str],
     currency: str,
-    weights_by_type: Mapping[str, Mapping[str, Mapping[date, float]] | None],
+    weights_by_type: Mapping[
+        str, Mapping[str, Mapping[date, float]] | None
+    ],
 ) -> dict[str, Any]:
-    """Build chart-ready deterministic analytics from stored billing periods."""
+    """Build chart-ready deterministic analytics from stored billing periods.
+
+    The daily rows are the canonical analytical layer. They use the exact same
+    reconstruction weights as Recorder, which allows the frontend to select an
+    arbitrary year, billing period, or custom date range without approximating
+    partial months or partial billing periods.
+    """
     types: dict[str, dict[str, Any]] = {}
     for consumption_type in CONSUMPTION_TYPES:
-        selected = [p for p in periods if p.consumption_type == consumption_type]
+        selected = [
+            period
+            for period in periods
+            if period.consumption_type == consumption_type
+        ]
         period_rows = _period_rows(selected)
         weights = weights_by_type.get(consumption_type)
+        daily = _daily_rows(selected, weights)
         types[consumption_type] = {
             "unit": units[consumption_type],
             "currency": currency,
+            "daily": daily,
             "period": period_rows,
-            "monthly": _aggregate_daily(selected, weights, "monthly"),
-            "annual": _aggregate_daily(selected, weights, "annual"),
+            "monthly": _aggregate_daily_rows(daily, "monthly"),
+            "annual": _aggregate_daily_rows(daily, "annual"),
             "comparison": _comparison(period_rows),
             "trend": _trend(period_rows),
         }
 
-    grid_months = {row["key"]: row for row in types[TYPE_ELECTRICITY]["monthly"]}
-    pv_months = {row["key"]: row for row in types[TYPE_PV_ELECTRICITY]["monthly"]}
+    grid_months = {
+        row["key"]: row for row in types[TYPE_ELECTRICITY]["monthly"]
+    }
+    pv_months = {
+        row["key"]: row for row in types[TYPE_PV_ELECTRICITY]["monthly"]
+    }
     mix: list[dict[str, Any]] = []
     for key in sorted(set(grid_months) | set(pv_months)):
         grid = float(grid_months.get(key, {}).get("consumption") or 0.0)

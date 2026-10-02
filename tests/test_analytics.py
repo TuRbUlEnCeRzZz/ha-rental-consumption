@@ -1,4 +1,4 @@
-"""Pure analytics tests for v1.6.0."""
+"""Pure analytics tests for v1.6.3."""
 
 from datetime import date
 
@@ -46,6 +46,49 @@ def test_weighted_monthly_analysis_uses_recorder_shape() -> None:
     rows = payload["types"][TYPE_ELECTRICITY]["monthly"]
     assert rows[0]["consumption"] == pytest.approx(25)
     assert rows[1]["consumption"] == pytest.approx(75)
+
+
+def test_daily_analysis_is_exact_and_keeps_period_identity() -> None:
+    period = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY, date(2026, 1, 31), date(2026, 2, 1), 100, cost=30
+    )
+    weights = {
+        TYPE_ELECTRICITY: {
+            period.period_id: {date(2026, 1, 31): 1, date(2026, 2, 1): 3}
+        }
+    }
+    payload = build_analysis_payload([period], _units(), "CHF", weights)
+    daily = payload["types"][TYPE_ELECTRICITY]["daily"]
+    assert len(daily) == 2
+    assert daily[0]["period_id"] == period.period_id
+    assert daily[0]["date"] == "2026-01-31"
+    assert daily[0]["consumption"] == pytest.approx(25)
+    assert daily[1]["consumption"] == pytest.approx(75)
+    assert sum(row["consumption"] for row in daily) == pytest.approx(100)
+    assert sum(row["cost"] or 0 for row in daily) == pytest.approx(30)
+    assert all(row["period_start_date"] == "2026-01-31" for row in daily)
+    assert all(row["period_end_date"] == "2026-02-01" for row in daily)
+
+
+def test_daily_analysis_allows_exact_partial_range_sum() -> None:
+    period = ConsumptionPeriod.create(
+        TYPE_ELECTRICITY, date(2026, 1, 1), date(2026, 1, 4), 100, cost=40
+    )
+    weights = {
+        TYPE_ELECTRICITY: {
+            period.period_id: {
+                date(2026, 1, 1): 1,
+                date(2026, 1, 2): 2,
+                date(2026, 1, 3): 3,
+                date(2026, 1, 4): 4,
+            }
+        }
+    }
+    payload = build_analysis_payload([period], _units(), "CHF", weights)
+    daily = payload["types"][TYPE_ELECTRICITY]["daily"]
+    selected = [row for row in daily if "2026-01-02" <= row["date"] <= "2026-01-03"]
+    assert sum(row["consumption"] for row in selected) == pytest.approx(50)
+    assert sum(row["cost"] or 0 for row in selected) == pytest.approx(20)
 
 
 def test_period_comparison_is_normalized_by_day() -> None:

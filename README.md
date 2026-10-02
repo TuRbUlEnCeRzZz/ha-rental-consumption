@@ -6,7 +6,7 @@
 
 Custom integration for **Home Assistant OS**, primarily developed and tested on Raspberry Pi 4, for rental apartments where individual utility meters are not directly accessible.
 
-It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focused on UX reliability, contextual help and a simpler Settings experience. Version 1.6.2 improves first-run guidance, empty states and billing-period entry workflows.
+It stores historical billing periods and reconstructs them in Home Assistant Recorder using external long-term statistics. Starting with v1.4.0, electricity can also be distributed according to the measured shape of the home's incoming load curve instead of being spread uniformly across every day. Version 1.5.x consolidated supplier history, multi-dwelling management, PV supply, VictoriaMetrics/Recorder handling and local branding. Version 1.6.0 added deterministic charts and analyses while using the exact same reconstructed allocation as Recorder. Version 1.6.1 focused on UX reliability, contextual help and a simpler Settings experience. Version 1.6.2 improves first-run guidance, empty states and billing-period entry workflows. Version 1.6.3 adds exact shared time-range selection across Overview and Analysis, period navigation, range-aware KPIs and additional charting polish.
 
 ## Highlights
 
@@ -31,7 +31,11 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 - deterministic Analysis-tab graphs for consumption, costs and unit prices;
 - period, monthly and annual analysis granularities;
 - latest-period comparisons normalized by day;
-- monthly grid/PV supply mix and PV share.
+- monthly grid/PV supply mix and PV share;
+- shared Overview/Analysis time scopes: all data, year, billing period, or exact custom range;
+- previous/next billing-period navigation in Analysis;
+- range-aware Overview totals, Analysis KPIs, cost/day and exact partial-period calculations;
+- Home Assistant `ha-chart-base` progressive enhancement with a dependency-free SVG fallback.
 
 ## Compatibility
 
@@ -50,6 +54,45 @@ It stores historical billing periods and reconstructs them in Home Assistant Rec
 5. Open **Settings → Devices & services → Add integration**.
 6. Search for **Rental Consumption**.
 
+
+
+
+## What changed in v1.6.3
+
+### Shared time scope
+
+Overview and Analysis now share the same time selection:
+
+```text
+All data | Year | Billing period | Custom range
+```
+
+The selected scope is preserved when switching between the two tabs. Billing-period mode adds previous/next arrows in Analysis so consecutive bills can be reviewed without reopening the selector.
+
+Custom ranges are exact. v1.6.3 exposes the already reconstructed daily values in the analysis payload and filters those daily points before aggregating them. A range such as `15.02.2026 → 15.05.2026` therefore uses only the reconstructed days inside that range, even when it cuts across multiple bills. No backend storage format changes.
+
+### Range-aware Overview and Analysis
+
+Overview totals, costs and weighted unit prices now follow the selected scope and display the covered dates/day count. Grid electricity also gains a simple consumption-by-billing-period bar chart.
+
+Analysis now shows selection-level KPIs for:
+
+- consumption;
+- normalized consumption per day;
+- total cost;
+- weighted unit price;
+- cost per day;
+- covered date range.
+
+When one billing period is selected, the existing percentage comparison remains available against the immediately previous period. Deeper N/N-1 logic remains reserved for v1.7.0.
+
+The grid/PV mix is filtered by the same exact date range. A short deterministic sentence summarizes the selected range and, for grid electricity, how many overlapping billing periods used load-curve weighting.
+
+### Charting and accessibility polish
+
+Billing-period charts use bars while monthly/annual trends use lines. The panel progressively uses Home Assistant's existing `ha-chart-base` when that component is already available in the frontend, while retaining the dependency-free SVG chart renderer as a fallback. No third-party dependency is added.
+
+Small labels are at least 12 px, time-scope controls collapse cleanly on mobile, and UI state colors rely on Home Assistant theme variables rather than hard-coded color fallbacks.
 
 
 
@@ -564,8 +607,7 @@ After updating:
 
 ## Roadmap
 
-- **v1.6.3**: Overview/Analysis UX, accessibility/mobile polish, additional charts, shared time-scope selection (all data / year / billing period / custom range), and previous/next period arrows in the Analysis tab.
-- **v1.7.0**: deeper analytical quality and N/N-1 comparisons.
+- **v1.7.0**: deeper analytical quality, N/N-1 comparisons, normalized trend interpretation and richer cross-period insights.
 
 ## Data and backups
 

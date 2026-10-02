@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.6.2."""
+"""Repository-level consistency tests for v1.6.3."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.6.2"
+    assert manifest["version"] == VERSION == "1.6.3"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -246,3 +246,32 @@ def test_v162_empty_states_onboarding_and_period_ux_are_shipped() -> None:
     assert "periodDurationDays" in utils
     assert "calculateUnitPrice" in utils
     assert "calculateTotalCost" in utils
+
+
+def test_v163_shared_time_scope_and_period_navigation_are_shipped() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    analytics = (INTEGRATION / "analytics.py").read_text(encoding="utf-8")
+    for token in (
+        "time-scope",
+        "scope-year",
+        "scope-period",
+        "scope-custom-start",
+        "scope-custom-end",
+        "period-prev",
+        "period-next",
+        "selectionSummaryTitle",
+        "costPerDay",
+        "overview-period-chart",
+        "ha-chart-base",
+    ):
+        assert token in panel
+    assert '"daily": daily' in analytics
+    assert "period_id" in analytics
+
+
+def test_v163_uses_theme_variables_without_hard_coded_ui_colors() -> None:
+    panel = (INTEGRATION / "frontend" / "rental-consumption-panel.js").read_text(encoding="utf-8")
+    assert "#ff9800" not in panel
+    assert "#db4437" not in panel
+    assert "#43a047" not in panel
+    assert "rgba(" not in panel
