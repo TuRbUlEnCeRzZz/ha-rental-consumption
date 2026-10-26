@@ -1,4 +1,4 @@
-"""Repository-level consistency tests for v1.7.0."""
+"""Repository-level consistency tests for v1.7.1."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ INTEGRATION = ROOT / "custom_components" / "rental_consumption"
 
 def test_manifest_version_and_owner() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == VERSION == "1.7.0"
+    assert manifest["version"] == VERSION == "1.7.1"
     assert manifest["codeowners"] == ["@TuRbUlEnCeRzZz"]
 
 
@@ -41,6 +41,7 @@ def test_victoriametrics_connection_test_checks_real_capabilities() -> None:
     assert 'steps["write"] = "ok"' in exporter
     assert 'steps["read"] = "ok"' in exporter
     assert 'steps["delete"] = "ok"' in exporter
+
 
 def test_export_settings_are_decoupled_from_recorder_rebuild() -> None:
     manager = (INTEGRATION / "manager.py").read_text(encoding="utf-8")

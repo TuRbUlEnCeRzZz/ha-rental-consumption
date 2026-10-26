@@ -1,0 +1,26 @@
+HA Rental Consumption — v1.7.1 GitHub update (lightweight overlay)
+===========================================================
+
+This archive contains complete replacement files only for changed code, metadata
+and regression tests; it is NOT a standalone HACS/Marketplace installation ZIP.
+
+1. Open the EXISTING GitHub repository TuRbUlEnCeRzZz/ha-rental-consumption.
+2. Upload the files and directories from this ZIP at its repository root.
+3. Preserve the relative paths, especially custom_components/rental_consumption/.
+4. Replace existing files with the exact same path. Keep all other files.
+5. The packaged CHANGELOG-1.7.1.md contains the new release entry. Prepend its
+   first section to the existing CHANGELOG.md without deleting old entries.
+6. Optionally link MARKETPLACE-2026.11.md in your main README (old HACS
+   instructions remain valid for Core 2026.10 and older only).
+7. Let GitHub Actions run the existing HACS, Hassfest and pytest checks.
+8. After a successful validation, tag the full repository state as v1.7.1.
+
+IMPORTANT: do not publish THIS overlay ZIP as the standalone release asset for
+HACS/Marketplace: it lacks unchanged integration files (manager, UI, brand, etc.).
+Marketplace installs the complete repository at tag v1.7.1 when the full repo
+is updated.
+
+Prior to updating HA Core 2026.11, take a Home Assistant OS backup. Do not
+uninstall Rental Consumption or delete any existing config entry or storage.
+
+No files need to be deleted for this compatibility update.
