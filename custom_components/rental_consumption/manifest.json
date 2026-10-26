@@ -4,11 +4,6 @@
   "codeowners": [
     "@TuRbUlEnCeRzZz"
   ],
-  "categories": [
-    "helpers.calculate_value",
-    "energy.meters_monitoring",
-    "water.meters_leak_detection"
-  ],
   "config_flow": true,
   "dependencies": [
     "frontend",
