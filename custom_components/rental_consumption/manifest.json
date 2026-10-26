@@ -17,3 +17,8 @@
   "requirements": [],
   "version": "1.7.1"
 }
+  "categories": [
+    "helpers.calculate_value",
+    "energy.meters_monitoring",
+    "water.meters_leak_detection"
+  ]
